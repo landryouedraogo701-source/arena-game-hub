@@ -1,0 +1,130 @@
+import React from 'react'
+import { testSupabaseConnection } from './lib/testSupabase'
+import ReactDOM from 'react-dom/client'
+import './styles.css'
+
+const games = [
+  { name: 'Free Fire', short: 'FF', category: 'Battle Royale' },
+  { name: 'eFootball', short: 'EF', category: 'Football' },
+  { name: 'EA Sports FC 26', short: 'FC', category: 'Football' },
+  { name: 'Call of Duty Mobile', short: 'COD', category: 'FPS' },
+  { name: 'PUBG Mobile', short: 'PUBG', category: 'Battle Royale' },
+]
+
+function App() {
+  return (
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-mark">A</div>
+          <div>
+            <strong>Arena</strong>
+            <span>GAME HUB</span>
+          </div>
+        </div>
+
+        <button className="profile-button" aria-label="Profil">
+          👤
+        </button>
+      </header>
+
+      <main>
+        <section className="hero">
+          <div>
+            <span className="eyebrow">PLATEFORME ESPORT</span>
+            <h1>Entre dans<br />l’arène.</h1>
+            <p>
+              Joue, affronte d’autres joueurs et suis les compétitions
+              en direct.
+            </p>
+
+            <div className="hero-actions">
+              <button className="primary-button">Explorer les jeux</button>
+              <button className="secondary-button">Voir les Lives</button>
+            </div>
+          </div>
+
+          <div className="hero-card">
+            <span className="live-dot"></span>
+            <span>LIVE</span>
+            <strong>Les compétitions arrivent</strong>
+            <small>Regarde les matchs en direct sur Arena.</small>
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">JEUX DISPONIBLES</span>
+              <h2>Choisis ton jeu</h2>
+            </div>
+            <button className="text-button">Tout voir →</button>
+          </div>
+
+          <div className="games-grid">
+            {games.map((game) => (
+              <button className="game-card" key={game.name}>
+                <div className="game-icon">{game.short}</div>
+                <div>
+                  <strong>{game.name}</strong>
+                  <span>{game.category}</span>
+                </div>
+                <span className="arrow">›</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="section feature-grid">
+          <article className="feature-card tournament">
+            <span className="feature-icon">🏆</span>
+            <span className="eyebrow">COMPÉTITIONS</span>
+            <h2>Affronte les meilleurs.</h2>
+            <p>Participe aux tournois et suis ton classement.</p>
+            <button>Découvrir →</button>
+          </article>
+
+          <article className="feature-card live">
+            <span className="feature-icon">🔴</span>
+            <span className="eyebrow">LIVE</span>
+            <h2>Regarde les matchs.</h2>
+            <p>Retrouve les sessions Live des joueurs et compétitions.</p>
+            <button>Voir les Lives →</button>
+          </article>
+        </section>
+      </main>
+
+      <nav className="bottom-nav">
+        <button className="active">
+          <span>⌂</span>
+          Accueil
+        </button>
+        <button>
+          <span>🎮</span>
+          Jeux
+        </button>
+        <button>
+          <span>🏆</span>
+          Matchs
+        </button>
+        <button>
+          <span>🔴</span>
+          Lives
+        </button>
+        <button>
+          <span>👤</span>
+          Profil
+        </button>
+      </nav>
+    </div>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+
+
+testSupabaseConnection()

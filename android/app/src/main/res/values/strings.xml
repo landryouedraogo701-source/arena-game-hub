@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Arena</string>
+    <string name="title_activity_main">Arena</string>
+    <string name="package_name">com.arena.gamehub</string>
+    <string name="custom_url_scheme">com.arena.gamehub</string>
+</resources>
