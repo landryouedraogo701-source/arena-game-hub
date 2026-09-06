@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { registerPlugin } from '@capacitor/core'
 import { supabase } from '../lib/supabase'
+
+type GameLauncherPlugin = {
+  openGame(options: {
+    packageName: string
+  }): Promise<{
+    installed: boolean
+    packageName: string
+  }>
+}
+
+const GameLauncher = registerPlugin<GameLauncherPlugin>('GameLauncher')
 
 type Match = {
   id: string
@@ -253,18 +265,31 @@ export default function MatchRoom() {
     navigate('/matches')
   }
 
-  function openGame() {
+  async function openGame() {
     if (!match?.game?.android_package) {
       setError("Impossible d'ouvrir ce jeu : identifiant Android manquant.")
       return
     }
 
-    const packageName = match.game.android_package
+    setError('')
 
-    const intentUrl =
-      `intent://#Intent;package=${packageName};end`
+    try {
+      const result = await GameLauncher.openGame({
+        packageName: match.game.android_package,
+      })
 
-    window.location.href = intentUrl
+      if (!result.installed) {
+        setError(
+          `${match.game.name} n'est pas installé sur ce téléphone.`
+        )
+      }
+    } catch (error) {
+      console.error('GAME LAUNCH ERROR:', error)
+
+      setError(
+        `Impossible d'ouvrir ${match.game.name}. Vérifie que le jeu est installé.`
+      )
+    }
   }
 
   async function finishMatch() {
