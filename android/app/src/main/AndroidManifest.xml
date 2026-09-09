@@ -38,4 +38,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <queries>
+        <package android:name="com.activision.callofduty.shooter" />
+        <package android:name="com.ea.gp.fifamobile" />
+        <package android:name="jp.konami.pesam" />
+        <package android:name="com.dts.freefireth" />
+        <package android:name="com.tencent.ig" />
+    </queries>
 </manifest>
