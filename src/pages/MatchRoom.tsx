@@ -286,8 +286,18 @@ export default function MatchRoom() {
     } catch (error) {
       console.error('GAME LAUNCH ERROR:', error)
 
+      const nativeError =
+        error &&
+        typeof error === 'object' &&
+        'message' in error
+          ? String(error.message)
+          : typeof error === 'string'
+            ? error
+            : JSON.stringify(error)
+
       setError(
-        `Impossible d'ouvrir ${match.game.name}. Vérifie que le jeu est installé.`
+        nativeError ||
+        `Impossible d'ouvrir ${match.game.name}.`
       )
     }
   }
