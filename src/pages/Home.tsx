@@ -83,6 +83,14 @@ export default function Home() {
                 <small>Résultats et preuves de match</small>
               </div>
             </Link>
+
+            <Link to="/management" className="feature-card">
+              <span>⚙</span>
+              <div>
+                <strong>Gestion Arena</strong>
+                <small>Organisation, arbitrage et contrôle selon ton rôle</small>
+              </div>
+            </Link>
           </div>
         </section>
       </main>
