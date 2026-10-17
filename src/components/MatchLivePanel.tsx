@@ -164,6 +164,27 @@ export default function MatchLivePanel({
   const isHost = !!currentUserId && session?.host_id === currentUserId
   const canHost = isParticipant && matchStatus === 'stream_connecting'
 
+  async function beginStreamConnection() {
+    if (!isParticipant) {
+      setError('Seul un joueur inscrit au match peut démarrer le Live.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      const { data, error: beginError } = await supabase.rpc('start_match_stream', {
+        p_match_id: matchId,
+      })
+      if (beginError) throw new Error(beginError.message)
+      if (data?.success === false) throw new Error(data?.message || 'Le serveur refuse de démarrer le Live.')
+      setNotice('Connexion du Live préparée. Tu peux maintenant démarrer la caméra.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Impossible de préparer la connexion Live.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function prepareAndPublish() {
     if (!currentUserId || !isParticipant) {
       setError('Seul un joueur inscrit au match peut démarrer le Live.')
@@ -209,6 +230,11 @@ export default function MatchLivePanel({
       <video ref={videoRef} playsInline autoPlay muted={role === 'publisher'} style={{ width: '100%', minHeight: 180, background: '#080b12', borderRadius: 12, objectFit: 'contain' }} />
       <div ref={audioContainerRef} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        {!connected && isParticipant && matchStatus === 'capture' && (
+          <button className="primary-button" type="button" disabled={busy} onClick={beginStreamConnection}>
+            {busy ? 'Préparation…' : '📡 Préparer la connexion Live'}
+          </button>
+        )}
         {!connected && canHost && (
           <button className="primary-button" type="button" disabled={busy} onClick={prepareAndPublish}>
             {busy ? 'Connexion…' : '🎥 Démarrer le Live'}
