@@ -589,3 +589,5 @@ button:disabled {
 .steps-card p { color: #9aa5b5; font-size: 13px; line-height: 1.55; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .steps-card p:last-child { border-bottom: 0; padding-bottom: 0; }
 .steps-card strong { color: #eef3fa; }
+
+.evidence-preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; padding: 10px; border-radius: 9px; background: #080c12; color: #aeb7c5; font-size: 11px; }
