@@ -32,6 +32,7 @@ export default function TournamentHub() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [canCreateTournament, setCanCreateTournament] = useState(false)
   const [message, setMessage] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
@@ -46,6 +47,12 @@ export default function TournamentHub() {
     const { data: sessionData } = await supabase.auth.getSession()
     const userId = sessionData.session?.user.id ?? null
     setCurrentUserId(userId)
+    if (userId) {
+      const { data: roles, error: roleError } = await supabase.from('user_roles').select('role').eq('user_id', userId)
+      setCanCreateTournament(!roleError && (roles ?? []).some((row: { role: string }) => ['organizer', 'admin'].includes(row.role)))
+    } else {
+      setCanCreateTournament(false)
+    }
     const [gameResult, tournamentResult] = await Promise.all([
       supabase.from('games').select('id,name,slug').eq('is_active', true).order('sort_order'),
       supabase.from('tournaments').select('id,name,description,status,participant_limit,starts_at,registration_closes_at,game_id,organizer_id,games(name)').in('status', ['draft', 'registration', 'draw', 'scheduled', 'live']).order('starts_at', { ascending: true }),
@@ -106,13 +113,8 @@ export default function TournamentHub() {
 
   async function generateBracket(id: string) {
     setMessage('')
-    const { error: closeError } = await supabase.rpc('close_tournament_registration', { p_tournament_id: id })
-    if (closeError) {
-      setMessage('Impossible de fermer les inscriptions. Vérifie que tu es l’organisateur et qu’au moins deux joueurs sont inscrits.')
-      return
-    }
-    const { error } = await supabase.rpc('generate_tournament_bracket', { p_tournament_id: id })
-    setMessage(error ? 'Les inscriptions sont fermées, mais le tirage a échoué. Contacte un administrateur avant de réessayer.' : 'Tirage effectué. Le tableau des matchs est créé.')
+    const { error } = await supabase.rpc('close_and_generate_tournament_bracket', { p_tournament_id: id })
+    setMessage(error ? 'Le tirage n’a pas été effectué. Les inscriptions restent inchangées si l’opération a échoué. Vérifie qu’au moins deux joueurs sont inscrits et réessaie.' : 'Tirage effectué. Le tableau des matchs est créé.')
     await loadData()
   }
 
@@ -148,7 +150,7 @@ export default function TournamentHub() {
         <section className="section">
           <div className="section-heading">
             <h2>Tournois disponibles</h2>
-            <button className="secondary-button" type="button" onClick={() => setShowCreate(v => !v)}>{showCreate ? 'Fermer' : '+ Créer'}</button>
+            {canCreateTournament && <button className="secondary-button" type="button" onClick={() => setShowCreate(v => !v)}>{showCreate ? 'Fermer' : '+ Créer'}</button>}
           </div>
           {message && <div className="notice-card" role="status">{message}</div>}
           {showCreate && <form className="form-card" onSubmit={createTournament}>
