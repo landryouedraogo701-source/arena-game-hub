@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Home from './pages/Home'
 import Games from './pages/Games'
@@ -13,6 +12,7 @@ import MatchRoom from './pages/MatchRoom'
 import MatchSearch from './pages/MatchSearch'
 import TournamentHub from './pages/TournamentHub'
 import Championship from './pages/Championship'
+import Management from './pages/Management'
 
 export default function App() {
   return (
@@ -26,6 +26,7 @@ export default function App() {
         <Route path="/matches" element={<Matches />} />
         <Route path="/tournaments" element={<TournamentHub />} />
         <Route path="/championship" element={<Championship />} />
+        <Route path="/management" element={<Management />} />
         <Route path="/matches/search" element={<MatchSearch />} />
         <Route path="/matches/:id" element={<MatchRoom />} />
 
@@ -42,4 +43,3 @@ export default function App() {
     </BrowserRouter>
   )
 }
-
