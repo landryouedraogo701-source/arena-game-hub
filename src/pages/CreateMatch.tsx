@@ -157,7 +157,7 @@ export default function CreateMatch() {
           </h1>
 
           <p>
-            Affronte un autre joueur en 1v1.
+            Choisis un format adapté au jeu : duel, équipes ou chacun pour soi.
           </p>
         </div>
 
