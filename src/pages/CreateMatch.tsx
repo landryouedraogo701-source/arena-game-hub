@@ -6,6 +6,7 @@ type Game = {
   id: string
   name: string
   short_name: string | null
+  supported_match_formats: string[]
 }
 
 export default function CreateMatch() {
@@ -18,6 +19,14 @@ export default function CreateMatch() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [format, setFormat] = useState('1v1')
+  const supportedFormats: Record<string, string> = {
+    '1v1': '1 contre 1 — 2 joueurs',
+    '2v2': '2 contre 2 — 4 joueurs en équipes',
+    'FFA-3': 'Chacun pour soi — 3 joueurs',
+    'FFA-4': 'Chacun pour soi — 4 joueurs',
+    'FFA-8': 'Chacun pour soi — 8 joueurs',
+    'FFA-16': 'Chacun pour soi — 16 joueurs',
+  }
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -36,7 +45,7 @@ export default function CreateMatch() {
 
     const { data, error } = await supabase
       .from('games')
-      .select('id, name, short_name')
+      .select('id, name, short_name, supported_match_formats')
       .eq('name', gameName)
       .eq('is_active', true)
       .maybeSingle()
@@ -54,6 +63,9 @@ export default function CreateMatch() {
     }
 
     setGame(data)
+    const allowed = data.supported_match_formats?.filter((value: string) => value in supportedFormats) ?? ['1v1']
+    const safeFormats = allowed.length > 0 ? allowed : ['1v1']
+    setFormat(current => safeFormats.includes(current) ? current : safeFormats[0])
     setLoading(false)
   }
 
@@ -204,11 +216,9 @@ export default function CreateMatch() {
                 disabled={creating}
                 style={{ width: '100%', marginBottom: '16px' }}
               >
-                <option value="1v1">1 contre 1 — 2 joueurs</option>
-                <option value="2v2">2 contre 2 — 4 joueurs en équipes</option>
-                <option value="FFA-3">Chacun pour soi — 3 joueurs</option>
-                <option value="FFA-4">Chacun pour soi — 4 joueurs</option>
-                <option value="FFA-8">Chacun pour soi — 8 joueurs</option>
+                {(game.supported_match_formats ?? ['1v1']).filter((value) => value in supportedFormats).map((value) => (
+                  <option value={value} key={value}>{supportedFormats[value]}</option>
+                ))}
               </select>
 
               <button
