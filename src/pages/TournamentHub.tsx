@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { BottomNav } from './Home'
 
-type Game = { id: string; name: string; slug: string }
+type Game = { id: string; name: string; slug: string; supported_match_formats: string[] }
 type Tournament = {
   id: string
   name: string
@@ -14,6 +14,7 @@ type Tournament = {
   registration_closes_at: string | null
   game_id: string
   organizer_id: string
+  match_format?: string
   games?: { name: string } | null
 }
 
@@ -39,6 +40,15 @@ export default function TournamentHub() {
   const [description, setDescription] = useState('')
   const [gameId, setGameId] = useState('')
   const [limit, setLimit] = useState('16')
+  const [matchFormat, setMatchFormat] = useState('1v1')
+  const formatLabels: Record<string, string> = {
+    '1v1': '1 contre 1',
+    '2v2': '2 contre 2 en équipes',
+    'FFA-3': 'Chacun pour soi · 3 joueurs',
+    'FFA-4': 'Chacun pour soi · 4 joueurs',
+    'FFA-8': 'Chacun pour soi · 8 joueurs',
+    'FFA-16': 'Chacun pour soi · 16 joueurs',
+  }
   const [startsAt, setStartsAt] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -55,13 +65,16 @@ export default function TournamentHub() {
       setCanCreateTournament(false)
     }
     const [gameResult, tournamentResult] = await Promise.all([
-      supabase.from('games').select('id,name,slug').eq('is_active', true).order('sort_order'),
+      supabase.from('games').select('id,name,slug,supported_match_formats').eq('is_active', true).order('sort_order'),
       supabase.from('tournaments').select('id,name,description,status,participant_limit,starts_at,registration_closes_at,game_id,organizer_id,games(name)').in('status', ['draft', 'registration', 'draw', 'scheduled', 'live']).order('starts_at', { ascending: true }),
     ])
     if (gameResult.error) setMessage('Impossible de charger les jeux. Vérifie la configuration Supabase et les autorisations.')
     else {
       setGames(gameResult.data ?? [])
       if (!gameId && gameResult.data?.[0]) setGameId(gameResult.data[0].id)
+      const selected = gameResult.data?.find((g: Game) => g.id === gameId) ?? gameResult.data?.[0]
+      const formats = selected?.supported_match_formats?.filter((f: string) => f in formatLabels) ?? ['1v1']
+      setMatchFormat(current => formats.includes(current) ? current : formats[0] ?? '1v1')
     }
     if (tournamentResult.error) setMessage('Les tournois ne peuvent pas être chargés pour le moment. Vérifie les politiques d’accès Supabase.')
     else setTournaments((tournamentResult.data ?? []) as unknown as Tournament[])
@@ -83,12 +96,13 @@ export default function TournamentHub() {
       return
     }
     setSaving(true)
-    const { error } = await supabase.rpc('create_tournament', {
+    const { error } = await supabase.rpc('create_tournament_with_format', {
       p_game_id: gameId,
       p_name: name.trim(),
       p_description: description.trim() || null,
       p_participant_limit: Number(limit),
       p_starts_at: startsAt ? new Date(startsAt).toISOString() : null,
+      p_match_format: matchFormat,
     })
     setSaving(false)
     if (error) {
@@ -101,6 +115,7 @@ export default function TournamentHub() {
     setName('')
     setDescription('')
     setStartsAt('')
+    setMatchFormat('1v1')
     setShowCreate(false)
     await loadData()
   }
@@ -167,6 +182,7 @@ export default function TournamentHub() {
             <label>Jeu<select required value={gameId} onChange={e => setGameId(e.target.value)}><option value="">Choisir un jeu</option>{games.map(game => <option value={game.id} key={game.id}>{game.name}</option>)}</select></label>
             <label>Description<textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1500} placeholder="Format, conditions et informations utiles" /></label>
             <label>Nombre maximum de participants<select value={limit} onChange={e => setLimit(e.target.value)}>{[2,4,8,16,32,64,128,256,512,1024].map(n => <option key={n} value={n}>{n} participants</option>)}</select></label>
+            <label>Format du tournoi<select value={matchFormat} onChange={e => setMatchFormat(e.target.value)}>{(games.find(g => g.id === gameId)?.supported_match_formats ?? ['1v1']).filter(f => f in formatLabels).map(f => <option key={f} value={f}>{formatLabels[f]}</option>)}</select></label>
             <label>Date prévue (facultatif)<input type="datetime-local" value={startsAt} onChange={e => setStartsAt(e.target.value)} /></label>
             <p className="muted-note">La création utilise la fonction sécurisée de Supabase. Le tournoi n’est pas publié automatiquement.</p>
             <button className="primary-button full-button" type="submit" disabled={saving || games.length === 0}>{saving ? 'Création…' : 'Créer le brouillon'}</button>
@@ -177,7 +193,7 @@ export default function TournamentHub() {
               <div className="tournament-card-top"><span className="eyebrow">{t.games?.name ?? 'Jeu Arena'}</span><span className="status-pill">{statusLabels[t.status] ?? t.status}</span></div>
               <h3>{t.name}</h3>
               {t.description && <p>{t.description}</p>}
-              <div className="tournament-meta"><span>👥 Jusqu’à {t.participant_limit} joueurs</span>{t.starts_at && <span>📅 {new Date(t.starts_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</div>
+              <div className="tournament-meta"><span>👥 Jusqu’à {t.participant_limit} participants</span><span>🎮 {formatLabels[t.match_format ?? '1v1'] ?? t.match_format ?? '1 contre 1'}</span>{t.starts_at && <span>📅 {new Date(t.starts_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</div>
               <button type="button" className="primary-button full-button" disabled={t.status !== 'registration'} onClick={() => void joinTournament(t.id)}>{t.status === 'registration' ? 'S’inscrire au tournoi' : 'Inscriptions indisponibles'}</button>
               {currentUserId === t.organizer_id && <div className="tournament-owner-actions">{t.status === 'draft' && <button type="button" className="secondary-button full-button" onClick={() => void publishTournament(t.id)}>Publier les inscriptions</button>}{t.status === 'registration' && <button type="button" className="secondary-button full-button" onClick={() => void generateBracket(t.id)}>Lancer le tirage au sort</button>}</div>}
             </article>)}</div>}
