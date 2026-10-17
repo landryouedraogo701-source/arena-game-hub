@@ -332,8 +332,9 @@ BEGIN
     RAISE EXCEPTION 'INVALID_TOURNAMENT_NAME';
   END IF;
   IF p_participant_limit < 2 OR p_participant_limit > 1024 THEN RAISE EXCEPTION 'INVALID_PARTICIPANT_LIMIT'; END IF;
-  IF p_match_format !~ '^(1v1|2v2|FFA-[0-9]+)
-
+  IF p_match_format NOT IN ('1v1','2v2') AND p_match_format !~ '^FFA-[0-9]+$' THEN
+    RAISE EXCEPTION 'INVALID_MATCH_FORMAT';
+  END IF;
   INSERT INTO public.tournaments(
     game_id,organizer_id,name,description,status,participant_limit,starts_at,
     rules,scoring_rules,proof_requirements,live_requirements,match_format,progression_mode
