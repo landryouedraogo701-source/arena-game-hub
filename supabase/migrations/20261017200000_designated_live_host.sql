@@ -253,3 +253,134 @@ REVOKE ALL ON FUNCTION public.start_live_session(uuid, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.activate_match_live(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.start_live_session(uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.activate_match_live(uuid, uuid) TO authenticated;
+
+
+-- Match capacity is derived from the selected format, with legacy formats staying 1v1.
+-- This prevents the database RPCs from silently limiting every match to two players.
+CREATE OR REPLACE FUNCTION public.join_match(p_match_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_match public.matches%rowtype;
+  v_capacity integer := 2;
+  v_player_count integer;
+  v_team text;
+BEGIN
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Utilisateur non connecté'; END IF;
+
+  SELECT * INTO v_match
+  FROM public.matches
+  WHERE id=p_match_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'Match introuvable'; END IF;
+  IF v_match.status <> 'waiting' THEN RAISE EXCEPTION 'Ce match n’accepte plus de joueur'; END IF;
+
+  IF upper(coalesce(v_match.format,'')) = '2V2' THEN
+    v_capacity := 4;
+  ELSIF upper(coalesce(v_match.format,'')) ~ '^FFA-[0-9]+$' THEN
+    v_capacity := split_part(upper(v_match.format), '-', 2)::integer;
+    IF v_capacity < 2 OR v_capacity > 16 THEN
+      RAISE EXCEPTION 'Capacité de match non valide';
+    END IF;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.match_players
+    WHERE match_id=p_match_id AND user_id=v_user_id
+  ) THEN
+    RETURN json_build_object('success',true,'message','Tu participes déjà à ce match');
+  END IF;
+
+  SELECT count(*) INTO v_player_count
+  FROM public.match_players WHERE match_id=p_match_id;
+
+  IF v_player_count >= v_capacity THEN
+    RAISE EXCEPTION 'Ce match est déjà complet';
+  END IF;
+
+  IF upper(coalesce(v_match.format,'')) = '2V2' THEN
+    -- Alternate teams as players join; creator is assigned to team A below as first participant.
+    v_team := CASE WHEN v_player_count % 2 = 0 THEN 'A' ELSE 'B' END;
+  ELSE
+    v_team := NULL;
+  END IF;
+
+  INSERT INTO public.match_players(match_id,user_id,team,status)
+  VALUES(p_match_id,v_user_id,v_team,'joined');
+
+  IF v_player_count + 1 >= v_capacity THEN
+    UPDATE public.matches SET status='ready', updated_at=now()
+    WHERE id=p_match_id;
+  END IF;
+
+  RETURN json_build_object(
+    'success',true,
+    'message','Tu as rejoint le match',
+    'players',v_player_count+1,
+    'capacity',v_capacity
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.set_match_ready(p_match_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_match public.matches%rowtype;
+  v_capacity integer := 2;
+  v_player_count integer;
+  v_ready_count integer;
+BEGIN
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Utilisateur non connecté'; END IF;
+
+  SELECT * INTO v_match FROM public.matches WHERE id=p_match_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Match introuvable'; END IF;
+  IF v_match.status NOT IN ('ready','preparing') THEN
+    RAISE EXCEPTION 'Le match n’est pas prêt pour cette étape';
+  END IF;
+
+  IF upper(coalesce(v_match.format,'')) = '2V2' THEN
+    v_capacity := 4;
+  ELSIF upper(coalesce(v_match.format,'')) ~ '^FFA-[0-9]+$' THEN
+    v_capacity := split_part(upper(v_match.format), '-', 2)::integer;
+    IF v_capacity < 2 OR v_capacity > 16 THEN RAISE EXCEPTION 'Capacité de match non valide'; END IF;
+  END IF;
+
+  UPDATE public.match_players SET status='ready'
+  WHERE match_id=p_match_id AND user_id=v_user_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Tu ne participes pas à ce match'; END IF;
+
+  SELECT count(*), count(*) FILTER (WHERE status='ready')
+  INTO v_player_count,v_ready_count
+  FROM public.match_players WHERE match_id=p_match_id;
+
+  IF v_player_count < v_capacity THEN
+    RETURN json_build_object('success',true,'status','ready','message','En attente des joueurs requis');
+  END IF;
+
+  IF v_ready_count >= v_capacity THEN
+    UPDATE public.matches
+    SET status='preparing',
+        preparation_started_at=coalesce(preparation_started_at,now()),
+        updated_at=now()
+    WHERE id=p_match_id;
+    RETURN json_build_object('success',true,'status','preparing','message','Tous les joueurs sont prêts');
+  END IF;
+
+  RETURN json_build_object('success',true,'status','ready','message','Tu es prêt. En attente des autres joueurs.');
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.join_match(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.set_match_ready(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.join_match(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.set_match_ready(uuid) TO authenticated;
