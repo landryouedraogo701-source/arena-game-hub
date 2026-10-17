@@ -676,6 +676,7 @@ export default function MatchRoom() {
             matchStatus={match.status}
             currentUserId={currentUserId}
             isParticipant={isParticipant}
+            designatedHostId={players[0]?.user_id ?? null}
           />
 
           {match.status === 'live' && isParticipant && (
