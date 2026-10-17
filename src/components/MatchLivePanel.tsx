@@ -26,12 +26,14 @@ export default function MatchLivePanel({
   matchStatus,
   currentUserId,
   isParticipant,
+  designatedHostId,
 }: {
   matchId: string
   matchType: string
   matchStatus: string
   currentUserId: string | null
   isParticipant: boolean
+  designatedHostId: string | null
 }) {
   const [session, setSession] = useState<LiveSession | null>(null)
   const [busy, setBusy] = useState(false)
@@ -161,12 +163,12 @@ export default function MatchLivePanel({
 
   if (matchType !== 'tournament') return null
 
-  const isHost = !!currentUserId && session?.host_id === currentUserId
-  const canHost = isParticipant && matchStatus === 'stream_connecting'
+  const isDesignatedHost = !!currentUserId && currentUserId === designatedHostId
+  const canHost = isParticipant && isDesignatedHost && matchStatus === 'stream_connecting'
 
   async function beginStreamConnection() {
-    if (!isParticipant) {
-      setError('Seul un joueur inscrit au match peut démarrer le Live.')
+    if (!isParticipant || !isDesignatedHost) {
+      setError('Seul l’hôte désigné par Arena peut préparer ce Live.')
       return
     }
     setBusy(true)
@@ -186,8 +188,8 @@ export default function MatchLivePanel({
   }
 
   async function prepareAndPublish() {
-    if (!currentUserId || !isParticipant) {
-      setError('Seul un joueur inscrit au match peut démarrer le Live.')
+    if (!currentUserId || !isParticipant || !isDesignatedHost) {
+      setError('Seul l’hôte désigné par Arena peut démarrer ce Live.')
       return
     }
     setBusy(true)
@@ -230,10 +232,13 @@ export default function MatchLivePanel({
       <video ref={videoRef} playsInline autoPlay muted={role === 'publisher'} style={{ width: '100%', minHeight: 180, background: '#080b12', borderRadius: 12, objectFit: 'contain' }} />
       <div ref={audioContainerRef} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-        {!connected && isParticipant && matchStatus === 'capture' && (
+        {!connected && isParticipant && matchStatus === 'capture' && isDesignatedHost && (
           <button className="primary-button" type="button" disabled={busy} onClick={beginStreamConnection}>
             {busy ? 'Préparation…' : '📡 Préparer la connexion Live'}
           </button>
+        )}
+        {!connected && isParticipant && matchStatus === 'capture' && !isDesignatedHost && (
+          <p role="status">Arena a désigné l’autre joueur comme hôte du Live. Tu peux regarder la diffusion une fois démarrée.</p>
         )}
         {!connected && canHost && (
           <button className="primary-button" type="button" disabled={busy} onClick={prepareAndPublish}>
@@ -245,9 +250,32 @@ export default function MatchLivePanel({
             {busy ? 'Connexion…' : '▶ Regarder le Live'}
           </button>
         )}
+        {connected && role === 'publisher' && (
+          <button className="secondary-button" type="button" disabled={busy} onClick={async () => {
+            setBusy(true)
+            setError('')
+            try {
+              const { error: stopError } = await supabase.rpc('stop_match_live_session', {
+                p_match_id: matchId,
+                p_live_session_id: session?.id,
+                p_reason: 'host_stopped',
+              })
+              if (stopError) throw new Error(stopError.message)
+              await disconnect()
+              await loadSession()
+              setNotice('Le Live a été terminé.')
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'Impossible de terminer le Live.')
+            } finally {
+              setBusy(false)
+            }
+          }}>
+            Terminer le Live
+          </button>
+        )}
         {connected && (
           <button className="secondary-button" type="button" onClick={() => void disconnect()}>
-            Déconnecter le Live
+            Quitter le lecteur
           </button>
         )}
       </div>
