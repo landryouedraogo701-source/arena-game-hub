@@ -53,7 +53,7 @@ function getMatchCapacity(format: string | null | undefined): number {
   const value = format.trim().toUpperCase()
   if (value === '1V1') return 2
   if (value === '2V2') return 4
-  const ffa = value.match(/^FFA-(\\d+)$/)
+  const ffa = value.match(/^FFA-(\d+)$/)
   if (ffa) {
     const capacity = Number(ffa[1])
     if (Number.isInteger(capacity) && capacity >= 2 && capacity <= 16) return capacity
