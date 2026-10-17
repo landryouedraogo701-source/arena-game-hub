@@ -106,9 +106,14 @@ export default function TournamentHub() {
 
   async function generateBracket(id: string) {
     setMessage('')
+    const { error: closeError } = await supabase.rpc('close_tournament_registration', { p_tournament_id: id })
+    if (closeError) {
+      setMessage('Impossible de fermer les inscriptions. Vérifie que tu es l’organisateur et qu’au moins deux joueurs sont inscrits.')
+      return
+    }
     const { error } = await supabase.rpc('generate_tournament_bracket', { p_tournament_id: id })
-    setMessage(error ? 'Tirage impossible. Vérifie les conditions d’inscription et le nombre de participants.' : 'Tirage effectué. Le tableau des matchs est créé.')
-    if (!error) await loadData()
+    setMessage(error ? 'Les inscriptions sont fermées, mais le tirage a échoué. Contacte un administrateur avant de réessayer.' : 'Tirage effectué. Le tableau des matchs est créé.')
+    await loadData()
   }
 
   async function joinTournament(id: string) {
