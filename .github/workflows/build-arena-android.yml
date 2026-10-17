@@ -3,44 +3,54 @@ name: Build Arena Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [feat/tournaments-ui]
-    paths:
-      - 'src/**'
-      - 'index.html'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'capacitor.config.ts'
-      - '.github/workflows/build-arena-android.yml'
+    branches:
+      - feat/tournaments-ui
+
+permissions:
+  contents: read
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
+
       - name: Install dependencies
         run: npm ci
-      - name: Build web app
+
+      - name: Build Arena web app
         run: npm run build
-      - name: Generate Android project
-        run: npx cap add android
-      - name: Sync web app into Android
-        run: npx cap sync android
+
+      - name: Prepare Android project
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
       - name: Build debug APK
-        run: cd android && chmod +x gradlew && ./gradlew assembleDebug
-      - name: Upload APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: arena-game-hub-debug-apk
+          name: Arena-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 7
