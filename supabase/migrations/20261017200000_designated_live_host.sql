@@ -40,10 +40,8 @@ BEGIN
     RETURN json_build_object('success',false,'status',v_status,'message','La capture n’est pas prête');
   END IF;
 
-  UPDATE public.matches SET status='stream_connecting', updated_at=now()
-  WHERE id=p_match_id;
-
-  RETURN json_build_object('success',true,'status','stream_connecting','host_id',v_host_id,'message','Connexion du LIVE en cours');
+  -- Live is a separate lifecycle: never change matches.status here.
+  RETURN json_build_object('success',true,'status',v_status,'host_id',v_host_id,'message','Le LIVE peut être préparé indépendamment du match');
 END;
 $function$;
 
@@ -65,7 +63,9 @@ BEGIN
   SELECT * INTO v_match FROM public.matches WHERE id=p_match_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Match introuvable'; END IF;
   IF v_match.match_type <> 'tournament' THEN RAISE EXCEPTION 'Le LIVE compétitif est réservé aux matchs de tournoi'; END IF;
-  IF v_match.status <> 'stream_connecting' THEN RAISE EXCEPTION 'Le match n’est pas prêt pour le LIVE'; END IF;
+  IF v_match.status NOT IN ('capture','stream_connecting','live') THEN
+    RAISE EXCEPTION 'Le match doit être en phase de capture ou en cours pour préparer le LIVE';
+  END IF;
 
   SELECT user_id INTO v_host_id
   FROM public.match_players
@@ -170,3 +170,86 @@ REVOKE ALL ON FUNCTION public.stop_match_live_session(uuid, uuid, text) FROM PUB
 GRANT EXECUTE ON FUNCTION public.start_match_stream(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.prepare_match_live_session(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.stop_match_live_session(uuid, uuid, text) TO authenticated;
+
+-- Starting the stream must not start or advance the match.
+CREATE OR REPLACE FUNCTION public.start_live_session(p_match_id uuid, p_live_session_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user uuid := auth.uid();
+  v_host uuid;
+  v_session_status text;
+  v_match_status text;
+BEGIN
+  IF v_user IS NULL THEN RAISE EXCEPTION 'Utilisateur non connecté'; END IF;
+
+  SELECT status INTO v_match_status FROM public.matches WHERE id=p_match_id FOR UPDATE;
+  IF v_match_status IS NULL THEN RAISE EXCEPTION 'Match introuvable'; END IF;
+  IF v_match_status NOT IN ('capture','stream_connecting','live') THEN
+    RAISE EXCEPTION 'Le match doit être en phase de capture ou en cours pour démarrer le LIVE';
+  END IF;
+
+  SELECT host_id,status INTO v_host,v_session_status
+  FROM public.live_sessions
+  WHERE id=p_live_session_id AND match_id=p_match_id FOR UPDATE;
+
+  IF v_host IS NULL THEN RAISE EXCEPTION 'Session LIVE introuvable'; END IF;
+  IF v_host <> v_user THEN RAISE EXCEPTION 'Seul l’hôte peut démarrer ce LIVE'; END IF;
+  IF v_session_status NOT IN ('waiting','live') THEN RAISE EXCEPTION 'La session LIVE n’est plus disponible'; END IF;
+
+  UPDATE public.live_sessions
+  SET status='live',
+      stream_state='live',
+      started_at=coalesce(started_at,now()),
+      stream_started_at=coalesce(stream_started_at,now()),
+      publisher_connected_at=coalesce(publisher_connected_at,now()),
+      last_heartbeat_at=now(),
+      last_provider_event_at=now(),
+      interruption_started_at=null,
+      failure_code=null,
+      failure_message=null,
+      updated_at=now()
+  WHERE id=p_live_session_id;
+
+  RETURN jsonb_build_object('success',true,'status','live','live_session_id',p_live_session_id,'match_id',p_match_id);
+END;
+$function$;
+
+-- Backward-compatible RPC: confirms Live readiness but never mutates match state.
+CREATE OR REPLACE FUNCTION public.activate_match_live(p_match_id uuid, p_live_session_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user uuid := auth.uid();
+  v_session_status text;
+  v_host uuid;
+  v_match_status text;
+BEGIN
+  IF v_user IS NULL THEN RAISE EXCEPTION 'Utilisateur non connecté'; END IF;
+
+  SELECT status INTO v_match_status FROM public.matches WHERE id=p_match_id FOR UPDATE;
+  IF v_match_status IS NULL THEN RAISE EXCEPTION 'Match introuvable'; END IF;
+
+  SELECT status,host_id INTO v_session_status,v_host
+  FROM public.live_sessions
+  WHERE id=p_live_session_id AND match_id=p_match_id FOR UPDATE;
+  IF v_session_status IS NULL THEN RAISE EXCEPTION 'Session LIVE introuvable pour ce match'; END IF;
+  IF v_host <> v_user THEN RAISE EXCEPTION 'Seul l’hôte du LIVE peut confirmer la diffusion'; END IF;
+  IF v_session_status <> 'live' THEN
+    RETURN json_build_object('success',false,'status',v_match_status,'message','Le flux LIVE n’est pas encore actif');
+  END IF;
+
+  RETURN json_build_object('success',true,'status',v_match_status,'message','Le LIVE est actif; l’état du match reste indépendant');
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.start_live_session(uuid, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.activate_match_live(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.start_live_session(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.activate_match_live(uuid, uuid) TO authenticated;
