@@ -50,6 +50,7 @@ export default function TournamentHub() {
     if (userId) {
       const { data: roles, error: roleError } = await supabase.from('user_roles').select('role').eq('user_id', userId)
       setCanCreateTournament(!roleError && (roles ?? []).some((row: { role: string }) => ['organizer', 'admin'].includes(row.role)))
+      if (roleError) setMessage('Impossible de vérifier ton rôle d’organisateur. Vérifie les autorisations de la table user_roles dans Supabase.')
     } else {
       setCanCreateTournament(false)
     }
@@ -150,7 +151,14 @@ export default function TournamentHub() {
         <section className="section">
           <div className="section-heading">
             <h2>Tournois disponibles</h2>
-            {canCreateTournament && <button className="secondary-button" type="button" onClick={() => setShowCreate(v => !v)}>{showCreate ? 'Fermer' : '+ Créer'}</button>}
+            {currentUserId ? <button className="secondary-button" type="button" onClick={() => {
+              if (!canCreateTournament) {
+                setMessage('Ton compte n’a pas le rôle Organisateur ou Administrateur. Arena masque la création pour ce rôle : demande à un administrateur de te l’attribuer dans user_roles. Cette vérification doit rester protégée côté serveur.')
+                return
+              }
+              setMessage('')
+              setShowCreate(v => !v)
+            }}>{showCreate ? 'Fermer' : '+ Créer'}</button> : <Link to="/login" className="secondary-button">Se connecter pour créer</Link>}
           </div>
           {message && <div className="notice-card" role="status">{message}</div>}
           {showCreate && <form className="form-card" onSubmit={createTournament}>
