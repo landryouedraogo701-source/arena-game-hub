@@ -333,6 +333,28 @@ BEGIN
   END IF;
   IF p_participant_limit < 2 OR p_participant_limit > 1024 THEN RAISE EXCEPTION 'INVALID_PARTICIPANT_LIMIT'; END IF;
   IF p_match_format !~ '^(1v1|2v2|FFA-[0-9]+)
+  IF p_match_format LIKE 'FFA-%' AND split_part(p_match_format,'-',2)::integer > 16 THEN
+    RAISE EXCEPTION 'INVALID_MATCH_FORMAT';
+  END IF;
+
+  INSERT INTO public.tournaments(
+    game_id,organizer_id,name,description,status,participant_limit,starts_at,
+    rules,scoring_rules,proof_requirements,live_requirements,match_format,progression_mode
+  )
+  VALUES(
+    p_game_id,v_user_id,btrim(p_name),nullif(btrim(coalesce(p_description,'')), ''),
+    'draft',p_participant_limit,p_starts_at,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,
+    p_match_format,'single_elimination'
+  )
+  RETURNING * INTO v_tournament;
+  RETURN v_tournament;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.create_tournament_with_format(uuid,text,text,integer,timestamptz,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.create_tournament_with_format(uuid,text,text,integer,timestamptz,text) TO authenticated;
+
+-- Configure supported formats per game only after verifying game-specific capability.
 -- Existing games remain 1v1 by default until an administrator explicitly enables more.
  THEN RAISE EXCEPTION 'INVALID_MATCH_FORMAT'; END IF;
   IF p_match_format LIKE 'FFA-%' AND split_part(p_match_format,'-',2)::integer > 16 THEN
