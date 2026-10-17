@@ -1,67 +1,84 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BottomNav } from './Home'
 import { supabase } from '../lib/supabase'
 
-type LiveMatch = {
+type LiveSession = {
   id: string
-  match_type: string
-  format: string
+  match_id: string | null
+  title: string | null
+  description: string | null
   status: string
-  room_code: string | null
-  game: {
-    name: string
-    short_name: string | null
-  } | null
+  stream_state: string | null
+  last_heartbeat_at: string | null
+  provider: string | null
+  room_name: string | null
+  viewer_count: number | null
+  game: { name: string; short_name: string | null } | null
 }
+
+const HEARTBEAT_MAX_AGE_MS = 45_000
+const REFRESH_INTERVAL_MS = 15_000
 
 export default function Lives() {
   const navigate = useNavigate()
-  const [lives, setLives] = useState<LiveMatch[]>([])
+  const [lives, setLives] = useState<LiveSession[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  async function loadLives() {
+  const loadLives = useCallback(async () => {
+    setError('')
+    const cutoff = new Date(Date.now() - HEARTBEAT_MAX_AGE_MS).toISOString()
     const { data, error: liveError } = await supabase
-      .from('matches')
+      .from('live_sessions')
       .select(`
         id,
-        match_type,
-        format,
+        match_id,
+        title,
+        description,
         status,
-        room_code,
-        game:games (
-          name,
-          short_name
-        )
+        stream_state,
+        last_heartbeat_at,
+        provider,
+        room_name,
+        viewer_count,
+        game:games ( name, short_name )
       `)
       .eq('status', 'live')
-      .order('created_at', { ascending: false })
+      .eq('stream_state', 'live')
+      .gte('last_heartbeat_at', cutoff)
+      .order('started_at', { ascending: false })
 
     if (liveError) {
-      setError(liveError.message)
+      setError("Impossible de vérifier les diffusions actives. Réessaie dans un instant.")
       setLoading(false)
       return
     }
 
     const formatted = (data ?? []).map((item) => ({
       ...item,
-      game: Array.isArray(item.game)
-        ? (item.game[0] ?? null)
-        : item.game,
-    })) as LiveMatch[]
+      game: Array.isArray(item.game) ? (item.game[0] ?? null) : item.game,
+    })) as LiveSession[]
 
     setLives(formatted)
     setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
-    loadLives()
+    void loadLives()
+    const interval = window.setInterval(() => void loadLives(), REFRESH_INTERVAL_MS)
+    const channel = supabase
+      .channel('public-live-session-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'live_sessions' }, () => {
+        void loadLives()
+      })
+      .subscribe()
 
-    const interval = window.setInterval(loadLives, 3000)
-
-    return () => window.clearInterval(interval)
-  }, [])
+    return () => {
+      window.clearInterval(interval)
+      void supabase.removeChannel(channel)
+    }
+  }, [loadLives])
 
   return (
     <div className="app-shell">
@@ -69,19 +86,19 @@ export default function Lives() {
         <div className="page-title">
           <span className="eyebrow">DIRECT</span>
           <h1>Lives</h1>
-          <p>Regarde les affrontements en direct.</p>
+          <p>Diffusions actives vérifiées à partir de l’état de la session.</p>
         </div>
 
         {error && (
-          <div className="empty-card">
-            <strong>Erreur</strong>
+          <div className="empty-card" role="alert">
+            <strong>Vérification indisponible</strong>
             <p>{error}</p>
           </div>
         )}
 
         {loading && (
-          <div className="empty-card">
-            <strong>Chargement des Lives...</strong>
+          <div className="empty-card" aria-live="polite">
+            <strong>Vérification des Lives...</strong>
           </div>
         )}
 
@@ -90,30 +107,25 @@ export default function Lives() {
             <div className="live-banner">
               <div className="live-dot">●</div>
               <div>
-                <strong>Les Lives arrivent</strong>
-                <p>Les diffusions Arena apparaîtront ici.</p>
+                <strong>Aucune diffusion confirmée</strong>
+                <p>Un match marqué « en cours » n’apparaît ici que si sa session LIVE est active et son signal récent.</p>
               </div>
             </div>
-
             <div className="empty-card">
               <span>◉</span>
               <strong>Aucun Live actuellement</strong>
-              <p>Lorsqu'une session sera lancée, elle sera visible ici.</p>
+              <p>Reviens plus tard : les sessions actives apparaîtront ici.</p>
             </div>
           </>
         )}
 
-        {!loading && lives.length > 0 && (
+        {!loading && !error && lives.length > 0 && (
           <div style={{ display: 'grid', gap: '14px' }}>
             {lives.map((live) => (
               <div
                 key={live.id}
                 className="auth-card"
-                style={{
-                  position: 'relative',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(255,60,60,0.35)',
-                }}
+                style={{ position: 'relative', overflow: 'hidden', border: '1px solid rgba(255,60,60,0.35)' }}
               >
                 <div
                   style={{
@@ -128,31 +140,35 @@ export default function Lives() {
                     fontSize: '13px',
                   }}
                 >
-                  🔴 LIVE
+                  🔴 LIVE CONFIRMÉ
                 </div>
-
                 <h2 style={{ margin: '14px 0 4px' }}>
-                  {live.game?.name ?? 'Jeu'}
+                  {live.title || live.game?.name || 'Diffusion Arena'}
                 </h2>
-
+                {live.description && <p>{live.description}</p>}
                 <p style={{ margin: 0 }}>
-                  {live.match_type} • {live.format}
+                  {live.game?.name ?? 'Jeu'} · {live.viewer_count ?? 0} spectateur(s)
                 </p>
-
-                <button
-                  type="button"
-                  className="primary-button full-button"
-                  style={{ marginTop: '14px' }}
-                  onClick={() => navigate(`/matches/${live.id}`)}
-                >
-                  ▶️ Ouvrir le match en direct
-                </button>
+                <p style={{ fontSize: '12px', opacity: 0.75 }}>
+                  Session active · signal récent
+                </p>
+                {live.match_id ? (
+                  <button
+                    type="button"
+                    className="primary-button full-button"
+                    style={{ marginTop: '14px' }}
+                    onClick={() => navigate(`/matches/${live.match_id}`)}
+                  >
+                    ▶️ Ouvrir la salle du match
+                  </button>
+                ) : (
+                  <p>Cette diffusion n’est pas liée à un match consultable.</p>
+                )}
               </div>
             ))}
           </div>
         )}
       </main>
-
       <BottomNav />
     </div>
   )
