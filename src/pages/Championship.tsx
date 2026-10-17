@@ -22,7 +22,7 @@ function collectEvidenceUrls(value: unknown): string[] {
     if (depth > 5 || item == null) return
     if (typeof item === 'string') {
       const candidate = item.trim()
-      if (/^https?:\/\//i.test(candidate) && /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(candidate)) found.add(candidate)
+      if (/^https?:\/\//i.test(candidate) && (/\.(png|jpe?g|webp|gif|avif|heic)(\?.*)?$/i.test(candidate) || /\/storage\/v1\/object\/(public|sign|authenticated)\//i.test(candidate))) found.add(candidate)
       return
     }
     if (Array.isArray(item)) {
@@ -127,7 +127,7 @@ export default function Championship() {
       setNotice('Décision non enregistrée. Vérifie ton rôle d’arbitre et réessaie.')
       return
     }
-    setNotice(decision === 'confirmed' ? 'Résultat validé. La progression du tournoi doit encore être vérifiée séparément.' : 'Résultat refusé et décision enregistrée.')
+    setNotice(decision === 'confirmed' ? 'Résultat validé. Le gagnant est transmis au tour suivant si le match appartient à un tournoi.' : 'Résultat refusé et décision enregistrée.')
     await loadResults()
   }
 
