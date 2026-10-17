@@ -11,6 +11,7 @@ import Register from './pages/Register'
 import CreateMatch from './pages/CreateMatch'
 import MatchRoom from './pages/MatchRoom'
 import MatchSearch from './pages/MatchSearch'
+import TournamentHub from './pages/TournamentHub'
 
 export default function App() {
   return (
@@ -22,6 +23,8 @@ export default function App() {
         <Route path="/games/:gameName" element={<GameModes />} />
 
         <Route path="/matches" element={<Matches />} />
+        <Route path="/tournaments" element={<TournamentHub />} />
+        <Route path="/championship" element={<TournamentHub />} />
         <Route path="/matches/search" element={<MatchSearch />} />
         <Route path="/matches/:id" element={<MatchRoom />} />
 
