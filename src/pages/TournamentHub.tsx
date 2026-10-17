@@ -13,6 +13,7 @@ type Tournament = {
   starts_at: string | null
   registration_closes_at: string | null
   game_id: string
+  organizer_id: string
   games?: { name: string } | null
 }
 
@@ -30,6 +31,7 @@ export default function TournamentHub() {
   const [games, setGames] = useState<Game[]>([])
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
@@ -41,9 +43,12 @@ export default function TournamentHub() {
 
   async function loadData() {
     setLoading(true)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData.session?.user.id ?? null
+    setCurrentUserId(userId)
     const [gameResult, tournamentResult] = await Promise.all([
       supabase.from('games').select('id,name,slug').eq('is_active', true).order('sort_order'),
-      supabase.from('tournaments').select('id,name,description,status,participant_limit,starts_at,registration_closes_at,game_id,games(name)').in('status', ['registration', 'draw', 'scheduled', 'live']).order('starts_at', { ascending: true }),
+      supabase.from('tournaments').select('id,name,description,status,participant_limit,starts_at,registration_closes_at,game_id,organizer_id,games(name)').in('status', ['draft', 'registration', 'draw', 'scheduled', 'live']).order('starts_at', { ascending: true }),
     ])
     if (gameResult.error) setMessage('Impossible de charger les jeux. Vérifie la configuration Supabase et les autorisations.')
     else {
@@ -90,6 +95,20 @@ export default function TournamentHub() {
     setStartsAt('')
     setShowCreate(false)
     await loadData()
+  }
+
+  async function publishTournament(id: string) {
+    setMessage('')
+    const { error } = await supabase.rpc('publish_tournament_registration', { p_tournament_id: id })
+    setMessage(error ? 'Publication refusée. Vérifie que tu es l’organisateur et que le tournoi peut être publié.' : 'Inscriptions ouvertes.')
+    if (!error) await loadData()
+  }
+
+  async function generateBracket(id: string) {
+    setMessage('')
+    const { error } = await supabase.rpc('generate_tournament_bracket', { p_tournament_id: id })
+    setMessage(error ? 'Tirage impossible. Vérifie les conditions d’inscription et le nombre de participants.' : 'Tirage effectué. Le tableau des matchs est créé.')
+    if (!error) await loadData()
   }
 
   async function joinTournament(id: string) {
@@ -145,6 +164,7 @@ export default function TournamentHub() {
               {t.description && <p>{t.description}</p>}
               <div className="tournament-meta"><span>👥 Jusqu’à {t.participant_limit} joueurs</span>{t.starts_at && <span>📅 {new Date(t.starts_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</div>
               <button type="button" className="primary-button full-button" disabled={t.status !== 'registration'} onClick={() => void joinTournament(t.id)}>{t.status === 'registration' ? 'S’inscrire au tournoi' : 'Inscriptions indisponibles'}</button>
+              {currentUserId === t.organizer_id && <div className="tournament-owner-actions">{t.status === 'draft' && <button type="button" className="secondary-button full-button" onClick={() => void publishTournament(t.id)}>Publier les inscriptions</button>}{t.status === 'registration' && <button type="button" className="secondary-button full-button" onClick={() => void generateBracket(t.id)}>Lancer le tirage au sort</button>}</div>}
             </article>)}</div>}
         </section>
         <section className="section">
