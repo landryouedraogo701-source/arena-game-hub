@@ -15,7 +15,45 @@ type Result = {
   reviewed_at: string | null
 }
 
-const statusLabels: Record<string, string> = {
+
+function collectEvidenceUrls(value: unknown): string[] {
+  const found = new Set<string>()
+  const visit = (item: unknown, depth = 0) => {
+    if (depth > 5 || item == null) return
+    if (typeof item === 'string') {
+      const candidate = item.trim()
+      if (/^https?:\/\//i.test(candidate) && /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(candidate)) found.add(candidate)
+      return
+    }
+    if (Array.isArray(item)) {
+      item.forEach(entry => visit(entry, depth + 1))
+      return
+    }
+    if (typeof item === 'object') {
+      Object.entries(item as Record<string, unknown>).forEach(([key, entry]) => {
+        if (/url|image|screenshot|capture|proof|evidence|photo|path/i.test(key)) visit(entry, depth + 1)
+      })
+    }
+  }
+  visit(value)
+  return [...found].slice(0, 6)
+}
+
+function EvidencePreview({ evidence }: { evidence: unknown }) {
+  const urls = collectEvidenceUrls(evidence)
+  return <div className="evidence-block">
+    {urls.length > 0 && <div className="evidence-gallery">{urls.map(url => <a key={url} href={url} target="_blank" rel="noreferrer" className="evidence-image-link">
+      <img src={url} alt="Capture de preuve du match" loading="lazy" referrerPolicy="no-referrer" />
+      <span>Ouvrir la capture ↗</span>
+    </a>)}</div>}
+    {urls.length === 0 && <p className="muted-note">Aucune URL d’image reconnue. La preuve reste consultable dans ses données ci-dessous.</p>}
+    <details className="evidence-details">
+      <summary>Afficher les données brutes de la preuve</summary>
+      <pre className="evidence-preview">{JSON.stringify(evidence, null, 2)}</pre>
+    </details>
+  </div>
+}
+\nconst statusLabels: Record<string, string> = {
   pending: 'En attente',
   confirmed: 'Validé',
   disputed: 'Contesté',
@@ -88,14 +126,14 @@ export default function Championship() {
       setNotice('Décision non enregistrée. Vérifie ton rôle d’arbitre et réessaie.')
       return
     }
-    setNotice(decision === 'confirmed' ? 'Résultat validé et décision enregistrée.' : 'Résultat refusé et décision enregistrée.')
+    setNotice(decision === 'confirmed' ? 'Résultat validé. La progression du tournoi doit encore être vérifiée séparément.' : 'Résultat refusé et décision enregistrée.')
     await loadResults()
   }
 
   return <div className="app-shell">
     <header className="topbar"><Link to="/" className="brand-name"><span className="brand-mark">A</span> Arena</Link><Link to="/profile" className="profile-button" aria-label="Profil">●</Link></header>
     <main className="page-content">
-      <div className="page-title"><span className="eyebrow">RÉSULTATS OFFICIELS</span><h1>Championnat</h1><p>Les résultats sont confirmés après examen des preuves et des éventuelles contestations.</p></div>
+      <div className="page-title"><span className="eyebrow">RÉSULTATS OFFICIELS</span><h1>Championnat</h1><p>Une validation humaine contrôle les captures avant de confirmer officiellement un résultat.</p></div>
       {isReferee && <div className="notice-card">Mode arbitrage : seuls les comptes referee, moderator ou admin peuvent valider ou refuser une preuve. Chaque décision est horodatée.</div>}
       {notice && <div className="notice-card" role="status">{notice}</div>}
       <section className="section"><div className="section-heading"><h2>{isReferee ? 'File de validation' : 'Mes résultats'}</h2><button type="button" className="secondary-button" onClick={() => void loadResults()}>Actualiser</button></div>
@@ -105,7 +143,7 @@ export default function Championship() {
             <p>Soumis le {new Date(result.created_at).toLocaleString('fr-FR')}</p>
             {result.claimed_winner_id && <p>Gagnant déclaré : <code>{result.claimed_winner_id.slice(0, 8)}</code></p>}
             <strong>Preuve envoyée</strong>
-            <pre className="evidence-preview">{JSON.stringify(result.evidence, null, 2)}</pre>
+            <EvidencePreview evidence={result.evidence} />
             {result.reviewed_at && <p>Examiné le {new Date(result.reviewed_at).toLocaleString('fr-FR')}</p>}
             {isReferee && ['pending', 'disputed'].includes(result.status) && <div className="review-actions"><button type="button" className="primary-button" disabled={workingId === result.id} onClick={() => void reviewResult(result.id, 'confirmed')}>{workingId === result.id ? 'Enregistrement…' : 'Valider le résultat'}</button><button type="button" className="secondary-button" disabled={workingId === result.id} onClick={() => void reviewResult(result.id, 'rejected')}>Refuser la preuve</button></div>}
           </article>)}</div>}
