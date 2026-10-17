@@ -17,6 +17,7 @@ export default function CreateMatch() {
   const [game, setGame] = useState<Game | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [format, setFormat] = useState('1v1')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -97,7 +98,7 @@ export default function CreateMatch() {
         game_id: game.id,
         created_by: user.id,
         status: 'waiting',
-        format: '1v1',
+        format,
         room_code: roomCode,
       })
       .select('id')
@@ -188,9 +189,26 @@ export default function CreateMatch() {
                 </h2>
 
                 <p style={{ margin: 0, opacity: 0.7 }}>
-                  Match amical • 1v1
+                  Match amical • {format}
                 </p>
               </div>
+
+              <label htmlFor="match-format" style={{ display: 'block', marginBottom: '8px' }}>
+                Format du match
+              </label>
+              <select
+                id="match-format"
+                value={format}
+                onChange={(event) => setFormat(event.target.value)}
+                disabled={creating}
+                style={{ width: '100%', marginBottom: '16px' }}
+              >
+                <option value="1v1">1 contre 1 — 2 joueurs</option>
+                <option value="2v2">2 contre 2 — 4 joueurs en équipes</option>
+                <option value="FFA-3">Chacun pour soi — 3 joueurs</option>
+                <option value="FFA-4">Chacun pour soi — 4 joueurs</option>
+                <option value="FFA-8">Chacun pour soi — 8 joueurs</option>
+              </select>
 
               <button
                 type="button"
