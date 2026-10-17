@@ -179,7 +179,7 @@ export default function TournamentHub() {
           {showCreate && <form className="form-card" onSubmit={createTournament}>
             <h3>Créer un tournoi</h3>
             <label>Nom du tournoi<input required minLength={3} maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="Ex. Coupe Arena du week-end" /></label>
-            <label>Jeu<select required value={gameId} onChange={e => setGameId(e.target.value)}><option value="">Choisir un jeu</option>{games.map(game => <option value={game.id} key={game.id}>{game.name}</option>)}</select></label>
+            <label>Jeu<select required value={gameId} onChange={e => { const nextId = e.target.value; setGameId(nextId); const allowed = games.find(g => g.id === nextId)?.supported_match_formats?.filter(f => f in formatLabels) ?? ['1v1']; setMatchFormat(allowed[0] ?? '1v1') }}><option value="">Choisir un jeu</option>{games.map(game => <option value={game.id} key={game.id}>{game.name}</option>)}</select></label>
             <label>Description<textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1500} placeholder="Format, conditions et informations utiles" /></label>
             <label>Nombre maximum de participants<select value={limit} onChange={e => setLimit(e.target.value)}>{[2,4,8,16,32,64,128,256,512,1024].map(n => <option key={n} value={n}>{n} participants</option>)}</select></label>
             <label>Format du tournoi<select value={matchFormat} onChange={e => setMatchFormat(e.target.value)}>{(games.find(g => g.id === gameId)?.supported_match_formats ?? ['1v1']).filter(f => f in formatLabels).map(f => <option key={f} value={f}>{formatLabels[f]}</option>)}</select></label>
