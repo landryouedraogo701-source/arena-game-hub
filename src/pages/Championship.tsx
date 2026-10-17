@@ -53,7 +53,8 @@ function EvidencePreview({ evidence }: { evidence: unknown }) {
     </details>
   </div>
 }
-\nconst statusLabels: Record<string, string> = {
+
+const statusLabels: Record<string, string> = {
   pending: 'En attente',
   confirmed: 'Validé',
   disputed: 'Contesté',
