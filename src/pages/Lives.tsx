@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { BottomNav } from './Home'
 import { supabase } from '../lib/supabase'
 
@@ -15,6 +16,7 @@ type LiveMatch = {
 }
 
 export default function Lives() {
+  const navigate = useNavigate()
   const [lives, setLives] = useState<LiveMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -141,8 +143,9 @@ export default function Lives() {
                   type="button"
                   className="primary-button full-button"
                   style={{ marginTop: '14px' }}
+                  onClick={() => navigate(`/matches/${live.id}`)}
                 >
-                  ▶️ Regarder le Live
+                  ▶️ Ouvrir le match en direct
                 </button>
               </div>
             ))}
