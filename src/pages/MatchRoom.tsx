@@ -48,6 +48,20 @@ type Message = {
   created_at: string
 }
 
+function getMatchCapacity(format: string | null | undefined): number {
+  if (!format) return 2
+  const value = format.trim().toUpperCase()
+  if (value === '1V1') return 2
+  if (value === '2V2') return 4
+  const ffa = value.match(/^FFA-(\\d+)$/)
+  if (ffa) {
+    const capacity = Number(ffa[1])
+    if (Number.isInteger(capacity) && capacity >= 2 && capacity <= 16) return capacity
+  }
+  // Unknown legacy formats keep the previous 1v1 behavior.
+  return 2
+}
+
 export default function MatchRoom() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -464,7 +478,7 @@ export default function MatchRoom() {
     (player) => player.user_id === currentUserId,
   )
   const canChat = isCreator || isParticipant
-  const full = players.length >= 2
+  const capacity = getMatchCapacity(match.format)\n  const full = players.length >= capacity
 
   const currentPlayer = players.find(
     (player) => player.user_id === currentUserId,
@@ -534,7 +548,7 @@ export default function MatchRoom() {
                 className="secondary-button full-button"
                 style={{ opacity: 0.6 }}
               >
-                ⏳ En attente d’un adversaire
+                ⏳ Places disponibles : {players.length}/{capacity}
               </div>
             )}
           </div>
@@ -600,9 +614,9 @@ export default function MatchRoom() {
                 textAlign: 'center',
               }}
             >
-              <strong>🟢 Les deux joueurs sont présents</strong>
+              <strong>🟢 Le match est complet ({players.length}/{capacity})</strong>
               <p style={{ marginBottom: 0 }}>
-                Vous pouvez maintenant vous préparer.
+                Tous les joueurs sont présents. Vous pouvez vous préparer.
               </p>
             </div>
           )}
@@ -632,7 +646,7 @@ export default function MatchRoom() {
             >
               <strong>✅ Tu es prêt</strong>
               <p style={{ marginBottom: 0 }}>
-                ⏳ En attente de l’autre joueur...
+                ⏳ En attente des autres joueurs...
               </p>
             </div>
           )}
@@ -705,7 +719,7 @@ export default function MatchRoom() {
               <strong>⏱️ Préparation</strong>
                 {countdown !== null && <div style={{ fontSize: '42px', fontWeight: 800, margin: '12px 0' }}>{countdown}</div>}
               <p style={{ marginBottom: 0 }}>
-                Les deux joueurs sont prêts.
+                Les joueurs requis sont prêts.
               </p>
             </div>
           )}
