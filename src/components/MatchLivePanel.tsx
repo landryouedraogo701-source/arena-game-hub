@@ -164,28 +164,8 @@ export default function MatchLivePanel({
   if (matchType !== 'tournament') return null
 
   const isDesignatedHost = !!currentUserId && currentUserId === designatedHostId
-  const canHost = isParticipant && isDesignatedHost && matchStatus === 'stream_connecting'
+  const canHost = isParticipant && isDesignatedHost && ['capture', 'stream_connecting', 'live'].includes(matchStatus)
 
-  async function beginStreamConnection() {
-    if (!isParticipant || !isDesignatedHost) {
-      setError('Seul l’hôte désigné par Arena peut préparer ce Live.')
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      const { data, error: beginError } = await supabase.rpc('start_match_stream', {
-        p_match_id: matchId,
-      })
-      if (beginError) throw new Error(beginError.message)
-      if (data?.success === false) throw new Error(data?.message || 'Le serveur refuse de démarrer le Live.')
-      setNotice('Connexion du Live préparée. Tu peux maintenant démarrer la caméra.')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Impossible de préparer la connexion Live.')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function prepareAndPublish() {
     if (!currentUserId || !isParticipant || !isDesignatedHost) {
@@ -232,18 +212,13 @@ export default function MatchLivePanel({
       <video ref={videoRef} playsInline autoPlay muted={role === 'publisher'} style={{ width: '100%', minHeight: 180, background: '#080b12', borderRadius: 12, objectFit: 'contain' }} />
       <div ref={audioContainerRef} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-        {!connected && isParticipant && matchStatus === 'capture' && isDesignatedHost && (
-          <button className="primary-button" type="button" disabled={busy} onClick={beginStreamConnection}>
-            {busy ? 'Préparation…' : '📡 Préparer la connexion Live'}
-          </button>
-        )}
-        {!connected && isParticipant && matchStatus === 'capture' && !isDesignatedHost && (
-          <p role="status">Arena a désigné l’autre joueur comme hôte du Live. Tu peux regarder la diffusion une fois démarrée.</p>
-        )}
-        {!connected && canHost && (
+        {!connected && isParticipant && ['capture', 'stream_connecting', 'live'].includes(matchStatus) && isDesignatedHost && (
           <button className="primary-button" type="button" disabled={busy} onClick={prepareAndPublish}>
-            {busy ? 'Connexion…' : '🎥 Démarrer le Live'}
+            {busy ? 'Connexion…' : session ? '🎥 Reprendre / démarrer le Live' : '🎥 Démarrer le Live'}
           </button>
+        )}
+        {!connected && isParticipant && ['capture', 'stream_connecting', 'live'].includes(matchStatus) && !isDesignatedHost && (
+          <p role="status">Arena a désigné l’autre joueur comme hôte du Live. Le match reste jouable même si le Live est indisponible.</p>
         )}
         {!connected && session?.status === 'live' && (
           <button className="secondary-button" type="button" disabled={busy} onClick={() => void joinLive(false, session)}>
