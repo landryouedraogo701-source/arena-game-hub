@@ -478,7 +478,8 @@ export default function MatchRoom() {
     (player) => player.user_id === currentUserId,
   )
   const canChat = isCreator || isParticipant
-  const capacity = getMatchCapacity(match.format)\n  const full = players.length >= capacity
+  const capacity = getMatchCapacity(match.format)
+  const full = players.length >= capacity
 
   const currentPlayer = players.find(
     (player) => player.user_id === currentUserId,
