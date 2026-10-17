@@ -299,5 +299,62 @@ $function$;
 REVOKE ALL ON FUNCTION public.review_match_result(uuid,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.review_match_result(uuid,text) TO authenticated;
 
+
+-- Format-aware tournament creation. The requested format must be explicitly enabled
+-- for the selected game; unsupported formats cannot be created accidentally.
+CREATE OR REPLACE FUNCTION public.create_tournament_with_format(
+  p_game_id uuid,
+  p_name text,
+  p_description text DEFAULT NULL,
+  p_participant_limit integer DEFAULT 16,
+  p_starts_at timestamptz DEFAULT NULL,
+  p_match_format text DEFAULT '1v1'
+)
+RETURNS public.tournaments
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_tournament public.tournaments;
+  v_supported text[];
+BEGIN
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+  IF NOT (public.has_role('organizer'::public.app_role) OR public.has_role('admin'::public.app_role)) THEN
+    RAISE EXCEPTION 'ORGANIZER_ROLE_REQUIRED';
+  END IF;
+  IF p_game_id IS NULL THEN RAISE EXCEPTION 'GAME_REQUIRED'; END IF;
+  SELECT supported_match_formats INTO v_supported FROM public.games WHERE id=p_game_id AND is_active=true;
+  IF v_supported IS NULL THEN RAISE EXCEPTION 'GAME_NOT_ACTIVE'; END IF;
+  IF NOT (p_match_format = ANY(v_supported)) THEN RAISE EXCEPTION 'FORMAT_NOT_SUPPORTED_FOR_GAME'; END IF;
+  IF p_name IS NULL OR length(btrim(p_name)) < 3 OR length(btrim(p_name)) > 120 THEN
+    RAISE EXCEPTION 'INVALID_TOURNAMENT_NAME';
+  END IF;
+  IF p_participant_limit < 2 OR p_participant_limit > 1024 THEN RAISE EXCEPTION 'INVALID_PARTICIPANT_LIMIT'; END IF;
+  IF p_match_format !~ '^(1v1|2v2|FFA-[0-9]+)
+-- Existing games remain 1v1 by default until an administrator explicitly enables more.
+ THEN RAISE EXCEPTION 'INVALID_MATCH_FORMAT'; END IF;
+  IF p_match_format LIKE 'FFA-%' AND split_part(p_match_format,'-',2)::integer > 16 THEN
+    RAISE EXCEPTION 'INVALID_MATCH_FORMAT';
+  END IF;
+
+  INSERT INTO public.tournaments(
+    game_id,organizer_id,name,description,status,participant_limit,starts_at,
+    rules,scoring_rules,proof_requirements,live_requirements,match_format,progression_mode
+  )
+  VALUES(
+    p_game_id,v_user_id,btrim(p_name),nullif(btrim(coalesce(p_description,'')), ''),
+    'draft',p_participant_limit,p_starts_at,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,
+    p_match_format,'single_elimination'
+  )
+  RETURNING * INTO v_tournament;
+  RETURN v_tournament;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.create_tournament_with_format(uuid,text,text,integer,timestamptz,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.create_tournament_with_format(uuid,text,text,integer,timestamptz,text) TO authenticated;
+
 -- Configure supported formats per game only after verifying game-specific capability.
 -- Existing games remain 1v1 by default until an administrator explicitly enables more.
