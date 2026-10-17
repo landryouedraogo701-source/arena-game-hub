@@ -115,7 +115,8 @@ export default function CreateMatch() {
       .insert({
         match_id: match.id,
         user_id: user.id,
-        team: format === '2v2' ? 'A' : null,\n        status: 'joined',
+        team: format === '2v2' ? 'A' : null,
+        status: 'joined',
       })
 
     if (playerError) {
