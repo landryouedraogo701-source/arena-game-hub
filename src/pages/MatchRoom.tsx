@@ -192,7 +192,8 @@ export default function MatchRoom() {
       .from('match_players')
       .select('id, user_id, team, status, joined_at')
       .eq('match_id', id)
-      .order('joined_at')
+      .order('joined_at', { ascending: true })
+      .order('user_id', { ascending: true })
 
     if (playerError) {
       setError(playerError.message)
