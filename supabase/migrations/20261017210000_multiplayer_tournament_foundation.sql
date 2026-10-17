@@ -115,5 +115,189 @@ $function$;
 REVOKE ALL ON FUNCTION public.finish_match(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.finish_match(uuid) TO authenticated;
 
+
+-- Generalized result review. A tournament match advances only after a referee
+-- confirms a claimed winner who is a registered participant of that match.
+-- Existing 1v1 bracket slots remain populated for backward compatibility.
+CREATE OR REPLACE FUNCTION public.review_match_result(p_result_id uuid, p_decision text)
+RETURNS public.match_results
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_result public.match_results%rowtype;
+  v_tm public.tournament_matches%rowtype;
+  v_next public.tournament_matches%rowtype;
+  v_winner uuid;
+  v_next_match_id uuid;
+  v_game_id uuid;
+  v_organizer_id uuid;
+  v_player_count integer;
+  v_winner_team text;
+  v_next_round integer;
+BEGIN
+  IF v_actor IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+  IF NOT (
+    public.has_role('referee'::public.app_role)
+    OR public.has_role('moderator'::public.app_role)
+    OR public.has_role('admin'::public.app_role)
+  ) THEN RAISE EXCEPTION 'NOT_AUTHORIZED'; END IF;
+  IF p_decision NOT IN ('confirmed','rejected') THEN RAISE EXCEPTION 'INVALID_DECISION'; END IF;
+
+  SELECT * INTO v_result FROM public.match_results WHERE id=p_result_id FOR UPDATE;
+  IF v_result.id IS NULL THEN RAISE EXCEPTION 'RESULT_NOT_FOUND'; END IF;
+  IF v_result.status NOT IN ('pending','disputed') THEN RAISE EXCEPTION 'RESULT_ALREADY_REVIEWED'; END IF;
+
+  IF p_decision='confirmed' THEN
+    SELECT tm.* INTO v_tm
+    FROM public.tournament_matches tm
+    WHERE tm.match_id=v_result.match_id
+    FOR UPDATE;
+
+    IF v_tm.id IS NOT NULL THEN
+      IF v_tm.status IN ('completed','finished') THEN
+        RAISE EXCEPTION 'TOURNAMENT_MATCH_ALREADY_COMPLETED';
+      END IF;
+
+      v_winner := v_result.claimed_winner_id;
+      IF v_winner IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.match_players mp
+        WHERE mp.match_id=v_result.match_id AND mp.user_id=v_winner
+      ) THEN
+        RAISE EXCEPTION 'CLAIMED_WINNER_NOT_IN_MATCH';
+      END IF;
+
+      SELECT count(*) INTO v_player_count
+      FROM public.match_players mp
+      WHERE mp.match_id=v_result.match_id;
+
+      -- Team tournaments advance the winning team as a unit. Until a dedicated
+      -- team-result UI submits a team, refuse to guess which team won.
+      IF coalesce((SELECT t.match_format FROM public.tournaments t WHERE t.id=v_tm.tournament_id),'1v1')='2v2' THEN
+        SELECT team INTO v_winner_team
+        FROM public.match_players WHERE match_id=v_result.match_id AND user_id=v_winner;
+        IF v_winner_team IS NULL THEN
+          RAISE EXCEPTION 'TEAM_RESULT_REQUIRED: winner must belong to a team';
+        END IF;
+        UPDATE public.tournament_matches
+        SET winner_id=v_winner, winning_team=v_winner_team,
+            result_payload=jsonb_build_object('mode','team','winning_team',v_winner_team,'winner_id',v_winner),
+            status='completed', updated_at=now()
+        WHERE id=v_tm.id;
+        UPDATE public.tournament_match_participants
+        SET outcome=CASE WHEN team_code=v_winner_team THEN 'qualified' ELSE 'eliminated' END,
+            placement=CASE WHEN team_code=v_winner_team THEN 1 ELSE 2 END,
+            updated_at=now()
+        WHERE tournament_match_id=v_tm.id;
+      ELSIF v_player_count > 2 THEN
+        UPDATE public.tournament_matches
+        SET winner_id=v_winner,
+            result_payload=jsonb_build_object('mode','ffa','winner_id',v_winner,'participant_count',v_player_count),
+            status='completed', updated_at=now()
+        WHERE id=v_tm.id;
+        UPDATE public.tournament_match_participants
+        SET outcome=CASE WHEN user_id=v_winner THEN 'qualified' ELSE 'eliminated' END,
+            placement=CASE WHEN user_id=v_winner THEN 1 ELSE 2 END,
+            updated_at=now()
+        WHERE tournament_match_id=v_tm.id;
+      ELSE
+        IF v_winner NOT IN (v_tm.player1_id,v_tm.player2_id) THEN
+          RAISE EXCEPTION 'CLAIMED_WINNER_NOT_IN_TOURNAMENT_MATCH';
+        END IF;
+        UPDATE public.tournament_matches
+        SET winner_id=v_winner, status='completed', updated_at=now()
+        WHERE id=v_tm.id;
+        UPDATE public.tournament_participants
+        SET status=CASE WHEN user_id=v_winner THEN 'qualified' ELSE 'eliminated' END,
+            updated_at=now()
+        WHERE tournament_id=v_tm.tournament_id
+          AND user_id IN (v_tm.player1_id,v_tm.player2_id);
+        UPDATE public.tournament_match_participants
+        SET outcome=CASE WHEN user_id=v_winner THEN 'qualified' ELSE 'eliminated' END,
+            placement=CASE WHEN user_id=v_winner THEN 1 ELSE 2 END,
+            updated_at=now()
+        WHERE tournament_match_id=v_tm.id;
+      END IF;
+
+      UPDATE public.matches
+      SET winner_id=v_winner,status='finished',
+          finished_at=coalesce(finished_at,now()),updated_at=now()
+      WHERE id=v_result.match_id;
+
+      -- Advance only an individual winner for single-player/FFA formats.
+      -- For team mode, preserve the team result and require the team-aware bracket
+      -- generator to populate the next match; never silently advance one teammate.
+      IF coalesce((SELECT t.match_format FROM public.tournaments t WHERE t.id=v_tm.tournament_id),'1v1')='2v2' THEN
+        RAISE EXCEPTION 'TEAM_BRACKET_ADVANCEMENT_REQUIRED';
+      END IF;
+
+      SELECT t.game_id,t.organizer_id INTO v_game_id,v_organizer_id
+      FROM public.tournaments t WHERE t.id=v_tm.tournament_id;
+
+      IF v_tm.next_tournament_match_id IS NOT NULL THEN
+        SELECT * INTO v_next FROM public.tournament_matches
+        WHERE id=v_tm.next_tournament_match_id FOR UPDATE;
+
+        IF mod(v_tm.bracket_position,2)=1 THEN
+          IF v_next.player1_id IS NOT NULL AND v_next.player1_id<>v_winner THEN
+            RAISE EXCEPTION 'NEXT_ROUND_SLOT_ALREADY_OCCUPIED';
+          END IF;
+          UPDATE public.tournament_matches SET player1_id=v_winner,updated_at=now() WHERE id=v_next.id;
+        ELSE
+          IF v_next.player2_id IS NOT NULL AND v_next.player2_id<>v_winner THEN
+            RAISE EXCEPTION 'NEXT_ROUND_SLOT_ALREADY_OCCUPIED';
+          END IF;
+          UPDATE public.tournament_matches SET player2_id=v_winner,updated_at=now() WHERE id=v_next.id;
+        END IF;
+
+        IF v_next.match_id IS NULL THEN
+          SELECT * INTO v_next FROM public.tournament_matches WHERE id=v_next.id FOR UPDATE;
+          IF v_next.player1_id IS NOT NULL AND v_next.player2_id IS NOT NULL THEN
+            INSERT INTO public.matches(match_type,game_id,created_by,status,format)
+            VALUES('tournament',v_game_id,v_organizer_id,'waiting','1v1')
+            RETURNING id INTO v_next_match_id;
+            INSERT INTO public.match_players(match_id,user_id,status)
+            VALUES(v_next_match_id,v_next.player1_id,'invited'),
+                  (v_next_match_id,v_next.player2_id,'invited');
+            INSERT INTO public.tournament_match_participants(tournament_match_id,user_id,outcome)
+            VALUES(v_next.id,v_next.player1_id,'active'),(v_next.id,v_next.player2_id,'active')
+            ON CONFLICT(tournament_match_id,user_id) DO NOTHING;
+            UPDATE public.tournament_matches
+            SET match_id=v_next_match_id,status='pending',updated_at=now()
+            WHERE id=v_next.id;
+          END IF;
+        END IF;
+        UPDATE public.tournament_rounds SET status='active'
+        WHERE id=v_next.round_id AND status='pending';
+      ELSE
+        UPDATE public.tournaments SET status='finished',updated_at=now()
+        WHERE id=v_tm.tournament_id;
+        UPDATE public.tournament_rounds SET status='completed' WHERE id=v_tm.round_id;
+      END IF;
+
+      UPDATE public.tournament_rounds tr
+      SET status='completed'
+      WHERE tr.id=v_tm.round_id
+        AND NOT EXISTS (
+          SELECT 1 FROM public.tournament_matches other
+          WHERE other.round_id=tr.id
+            AND other.status NOT IN ('completed','finished','bye','cancelled')
+        );
+    END IF;
+  END IF;
+
+  UPDATE public.match_results
+  SET status=p_decision,reviewed_by=v_actor,reviewed_at=now()
+  WHERE id=p_result_id
+  RETURNING * INTO v_result;
+  RETURN v_result;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.review_match_result(uuid,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.review_match_result(uuid,text) TO authenticated;
+
 -- Configure supported formats per game only after verifying game-specific capability.
 -- Existing games remain 1v1 by default until an administrator explicitly enables more.
