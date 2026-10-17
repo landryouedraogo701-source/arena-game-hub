@@ -289,17 +289,24 @@ BEGIN
     END IF;
   END IF;
 
+  -- Bracket generation pre-creates invited participant rows. Joining must
+  -- activate that invitation instead of treating it as an already-joined player.
   IF EXISTS (
     SELECT 1 FROM public.match_players
-    WHERE match_id=p_match_id AND user_id=v_user_id
+    WHERE match_id=p_match_id AND user_id=v_user_id AND status IN ('joined','ready')
   ) THEN
     RETURN json_build_object('success',true,'message','Tu participes déjà à ce match');
   END IF;
 
   SELECT count(*) INTO v_player_count
-  FROM public.match_players WHERE match_id=p_match_id;
+  FROM public.match_players
+  WHERE match_id=p_match_id AND status IN ('joined','ready');
 
-  IF v_player_count >= v_capacity THEN
+  IF v_player_count >= v_capacity
+     AND NOT EXISTS (
+       SELECT 1 FROM public.match_players
+       WHERE match_id=p_match_id AND user_id=v_user_id AND status='invited'
+     ) THEN
     RAISE EXCEPTION 'Ce match est déjà complet';
   END IF;
 
@@ -310,8 +317,14 @@ BEGIN
     v_team := NULL;
   END IF;
 
-  INSERT INTO public.match_players(match_id,user_id,team,status)
-  VALUES(p_match_id,v_user_id,v_team,'joined');
+  UPDATE public.match_players
+  SET status='joined', joined_at=coalesce(joined_at,now()), team=coalesce(team,v_team)
+  WHERE match_id=p_match_id AND user_id=v_user_id AND status='invited';
+
+  IF NOT FOUND THEN
+    INSERT INTO public.match_players(match_id,user_id,team,status)
+    VALUES(p_match_id,v_user_id,v_team,'joined');
+  END IF;
 
   IF v_player_count + 1 >= v_capacity THEN
     UPDATE public.matches SET status='ready', updated_at=now()
