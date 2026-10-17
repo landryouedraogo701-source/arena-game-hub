@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { registerPlugin } from '@capacitor/core'
 import { supabase } from '../lib/supabase'
+import MatchLivePanel from '../components/MatchLivePanel'
 
 type GameLauncherPlugin = {
   openGame(options: {
@@ -668,6 +669,14 @@ export default function MatchRoom() {
               </button>
             </div>
           )}
+
+          <MatchLivePanel
+            matchId={match.id}
+            matchType={match.match_type}
+            matchStatus={match.status}
+            currentUserId={currentUserId}
+            isParticipant={isParticipant}
+          />
 
           {match.status === 'live' && isParticipant && (
             <button
