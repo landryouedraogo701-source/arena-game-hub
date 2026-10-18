@@ -106,9 +106,24 @@ export default function TournamentHub() {
     })
     setSaving(false)
     if (error) {
-      setMessage(error.message.includes('permission') || error.message.includes('auth')
-        ? 'La création a été refusée. Vérifie ta connexion et les autorisations du compte.'
-        : 'Création impossible pour le moment. Vérifie les champs et les règles Supabase.')
+      console.error('[TournamentHub] Erreur Supabase lors de create_tournament_with_format :', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
+      const backendMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ')
+      let userMessage = 'La création du tournoi a échoué. Réessaie. Si le problème persiste, communique le code d’erreur à l’administrateur technique.'
+      if (backendMessage.includes('AUTH_REQUIRED')) userMessage = 'Ta session a expiré. Reconnecte-toi puis réessaie.'
+      else if (backendMessage.includes('ORGANIZER_ROLE_REQUIRED')) userMessage = 'Ton compte ne possède pas le rôle Organisateur ou Administrateur requis dans Supabase.'
+      else if (backendMessage.includes('GAME_REQUIRED')) userMessage = 'Sélectionne un jeu avant de créer le tournoi.'
+      else if (backendMessage.includes('GAME_NOT_ACTIVE')) userMessage = 'Le jeu sélectionné est désactivé dans le catalogue Supabase. Choisis un jeu actif.'
+      else if (backendMessage.includes('INVALID_TOURNAMENT_NAME')) userMessage = 'Le nom du tournoi doit contenir entre 3 et 120 caractères.'
+      else if (backendMessage.includes('INVALID_PARTICIPANT_LIMIT')) userMessage = 'Le nombre de participants doit être compris entre 2 et 1 024.'
+      else if (backendMessage.includes('MATCH_FORMAT_NOT_SUPPORTED_BY_GAME')) userMessage = 'Ce format n’est pas autorisé pour le jeu sélectionné. Modifie les formats pris en charge dans le catalogue Supabase.'
+      else if (backendMessage.includes('INVALID_MATCH_FORMAT')) userMessage = 'Le format sélectionné est invalide. Choisis un format proposé par le formulaire.'
+      else userMessage = 'Échec Supabase' + (error.code ? ' (' + error.code + ')' : '') + ' : ' + error.message
+      setMessage(userMessage)
       return
     }
     setMessage('Tournoi créé. Il reste en brouillon tant que tu ne publies pas les inscriptions.')
