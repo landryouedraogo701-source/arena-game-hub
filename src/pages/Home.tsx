@@ -67,6 +67,30 @@ export default function Home() {
                 <small>Regarde les matchs en direct</small>
               </div>
             </Link>
+
+            <Link to="/tournaments" className="feature-card">
+              <span>🏆</span>
+              <div>
+                <strong>Tournois</strong>
+                <small>Crée ou rejoins une compétition</small>
+              </div>
+            </Link>
+
+            <Link to="/championship" className="feature-card">
+              <span>✓</span>
+              <div>
+                <strong>Championnat</strong>
+                <small>Résultats et preuves de match</small>
+              </div>
+            </Link>
+
+            <Link to="/management" className="feature-card">
+              <span>⚙</span>
+              <div>
+                <strong>Gestion Arena</strong>
+                <small>Organisation, arbitrage et contrôle selon ton rôle</small>
+              </div>
+            </Link>
           </div>
         </section>
       </main>
@@ -82,6 +106,7 @@ export function BottomNav() {
       <Link to="/" className="nav-item active"><span>⌂</span><small>Accueil</small></Link>
       <Link to="/games" className="nav-item"><span>◈</span><small>Jeux</small></Link>
       <Link to="/matches" className="nav-item"><span>⚔</span><small>Matchs</small></Link>
+      <Link to="/tournaments" className="nav-item"><span>🏆</span><small>Tournois</small></Link>
       <Link to="/lives" className="nav-item"><span>●</span><small>Lives</small></Link>
       <Link to="/profile" className="nav-item"><span>○</span><small>Profil</small></Link>
     </nav>

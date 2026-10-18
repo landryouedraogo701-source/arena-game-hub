@@ -32,7 +32,7 @@ export default function GameModes() {
             type="button"
             className="secondary-button full-button"
             onClick={() =>
-              navigate(`/competition/create?game=${encodeURIComponent(game)}`)
+              navigate(`/championship?game=${encodeURIComponent(game)}`)
             }
           >
             ⚔️ Compétition
@@ -43,7 +43,7 @@ export default function GameModes() {
             type="button"
             className="secondary-button full-button"
             onClick={() =>
-              navigate(`/tournament/create?game=${encodeURIComponent(game)}`)
+              navigate(`/tournaments?game=${encodeURIComponent(game)}`)
             }
           >
             🏆 Tournoi

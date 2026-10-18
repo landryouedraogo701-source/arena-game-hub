@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { registerPlugin } from '@capacitor/core'
 import { supabase } from '../lib/supabase'
+import MatchLivePanel from '../components/MatchLivePanel'
 
 type GameLauncherPlugin = {
   openGame(options: {
@@ -45,6 +46,20 @@ type Message = {
   sender_id: string
   message: string
   created_at: string
+}
+
+function getMatchCapacity(format: string | null | undefined): number {
+  if (!format) return 2
+  const value = format.trim().toUpperCase()
+  if (value === '1V1') return 2
+  if (value === '2V2') return 4
+  const ffa = value.match(/^FFA-(\d+)$/)
+  if (ffa) {
+    const capacity = Number(ffa[1])
+    if (Number.isInteger(capacity) && capacity >= 2 && capacity <= 16) return capacity
+  }
+  // Unknown legacy formats keep the previous 1v1 behavior.
+  return 2
 }
 
 export default function MatchRoom() {
@@ -191,7 +206,8 @@ export default function MatchRoom() {
       .from('match_players')
       .select('id, user_id, team, status, joined_at')
       .eq('match_id', id)
-      .order('joined_at')
+      .order('joined_at', { ascending: true })
+      .order('user_id', { ascending: true })
 
     if (playerError) {
       setError(playerError.message)
@@ -462,7 +478,8 @@ export default function MatchRoom() {
     (player) => player.user_id === currentUserId,
   )
   const canChat = isCreator || isParticipant
-  const full = players.length >= 2
+  const capacity = getMatchCapacity(match.format)
+  const full = players.length >= capacity
 
   const currentPlayer = players.find(
     (player) => player.user_id === currentUserId,
@@ -532,7 +549,7 @@ export default function MatchRoom() {
                 className="secondary-button full-button"
                 style={{ opacity: 0.6 }}
               >
-                ⏳ En attente d’un adversaire
+                ⏳ Places disponibles : {players.length}/{capacity}
               </div>
             )}
           </div>
@@ -598,9 +615,9 @@ export default function MatchRoom() {
                 textAlign: 'center',
               }}
             >
-              <strong>🟢 Les deux joueurs sont présents</strong>
+              <strong>🟢 Le match est complet ({players.length}/{capacity})</strong>
               <p style={{ marginBottom: 0 }}>
-                Vous pouvez maintenant vous préparer.
+                Tous les joueurs sont présents. Vous pouvez vous préparer.
               </p>
             </div>
           )}
@@ -630,7 +647,7 @@ export default function MatchRoom() {
             >
               <strong>✅ Tu es prêt</strong>
               <p style={{ marginBottom: 0 }}>
-                ⏳ En attente de l’autre joueur...
+                ⏳ En attente des autres joueurs...
               </p>
             </div>
           )}
@@ -669,6 +686,15 @@ export default function MatchRoom() {
             </div>
           )}
 
+          <MatchLivePanel
+            matchId={match.id}
+            matchType={match.match_type}
+            matchStatus={match.status}
+            currentUserId={currentUserId}
+            isParticipant={isParticipant}
+            designatedHostId={players[0]?.user_id ?? null}
+          />
+
           {match.status === 'live' && isParticipant && (
             <button
               type="button"
@@ -694,7 +720,7 @@ export default function MatchRoom() {
               <strong>⏱️ Préparation</strong>
                 {countdown !== null && <div style={{ fontSize: '42px', fontWeight: 800, margin: '12px 0' }}>{countdown}</div>}
               <p style={{ marginBottom: 0 }}>
-                Les deux joueurs sont prêts.
+                Les joueurs requis sont prêts.
               </p>
             </div>
           )}
@@ -715,22 +741,28 @@ export default function MatchRoom() {
           <button
             type="button"
             onClick={() => setChatOpen((open) => !open)}
+            aria-label={chatOpen ? 'Fermer la discussion' : 'Écrire aux joueurs du match'}
             style={{
               position: 'fixed',
-              right: '18px',
+              right: '14px',
               bottom: '82px',
-              width: '58px',
-              height: '58px',
-              borderRadius: '50%',
-              border: 'none',
+              minHeight: '54px',
+              padding: '0 18px',
+              borderRadius: '999px',
+              border: '1px solid rgba(255,255,255,0.22)',
               background: '#ff8a00',
               color: '#fff',
-              fontSize: '25px',
+              fontSize: '15px',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '9px',
               zIndex: 100,
               boxShadow: '0 8px 25px rgba(0,0,0,0.35)',
             }}
           >
-            💬
+            <span aria-hidden="true">💬</span>
+            {chatOpen ? 'Fermer la discussion' : 'Écrire aux joueurs'}
           </button>
 
           {chatOpen && (

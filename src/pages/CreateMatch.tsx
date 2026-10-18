@@ -6,6 +6,7 @@ type Game = {
   id: string
   name: string
   short_name: string | null
+  supported_match_formats: string[]
 }
 
 export default function CreateMatch() {
@@ -17,6 +18,15 @@ export default function CreateMatch() {
   const [game, setGame] = useState<Game | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [format, setFormat] = useState('1v1')
+  const supportedFormats: Record<string, string> = {
+    '1v1': '1 contre 1 — 2 joueurs',
+    '2v2': '2 contre 2 — 4 joueurs en équipes',
+    'FFA-3': 'Chacun pour soi — 3 joueurs',
+    'FFA-4': 'Chacun pour soi — 4 joueurs',
+    'FFA-8': 'Chacun pour soi — 8 joueurs',
+    'FFA-16': 'Chacun pour soi — 16 joueurs',
+  }
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -35,13 +45,14 @@ export default function CreateMatch() {
 
     const { data, error } = await supabase
       .from('games')
-      .select('id, name, short_name')
+      .select('id, name, short_name, supported_match_formats')
       .eq('name', gameName)
       .eq('is_active', true)
       .maybeSingle()
 
     if (error) {
-      setError(error.message)
+      console.error('[CreateMatch] Échec du chargement du jeu :', error)
+      setError('Impossible de charger les informations de ce jeu. Réessaie dans quelques instants.')
       setLoading(false)
       return
     }
@@ -53,6 +64,9 @@ export default function CreateMatch() {
     }
 
     setGame(data)
+    const allowed = data.supported_match_formats?.filter((value: string) => value in supportedFormats) ?? ['1v1']
+    const safeFormats = allowed.length > 0 ? allowed : ['1v1']
+    setFormat(current => safeFormats.includes(current) ? current : safeFormats[0])
     setLoading(false)
   }
 
@@ -97,7 +111,7 @@ export default function CreateMatch() {
         game_id: game.id,
         created_by: user.id,
         status: 'waiting',
-        format: '1v1',
+        format,
         room_code: roomCode,
       })
       .select('id')
@@ -105,7 +119,8 @@ export default function CreateMatch() {
 
     if (matchError || !match) {
       setCreating(false)
-      setError(matchError?.message ?? 'Impossible de créer le match.')
+      console.error('[CreateMatch] Échec de création du match :', matchError)
+      setError('La création du match amical a échoué. Vérifie ta connexion puis réessaie.')
       return
     }
 
@@ -114,6 +129,7 @@ export default function CreateMatch() {
       .insert({
         match_id: match.id,
         user_id: user.id,
+        team: format === '2v2' ? 'A' : null,
         status: 'joined',
       })
 
@@ -124,7 +140,8 @@ export default function CreateMatch() {
         .eq('id', match.id)
 
       setCreating(false)
-      setError(playerError.message)
+      console.error('[CreateMatch] Échec de l’ajout du créateur aux participants :', playerError)
+      setError('Le match n’a pas pu être initialisé correctement. Aucun match incomplet ne sera conservé. Réessaie.')
       return
     }
 
@@ -155,7 +172,7 @@ export default function CreateMatch() {
           </h1>
 
           <p>
-            Affronte un autre joueur en 1v1.
+            Choisis un format adapté au jeu : duel, équipes ou chacun pour soi.
           </p>
         </div>
 
@@ -188,9 +205,24 @@ export default function CreateMatch() {
                 </h2>
 
                 <p style={{ margin: 0, opacity: 0.7 }}>
-                  Match amical • 1v1
+                  Match amical • {format}
                 </p>
               </div>
+
+              <label htmlFor="match-format" style={{ display: 'block', marginBottom: '8px' }}>
+                Format du match
+              </label>
+              <select
+                id="match-format"
+                value={format}
+                onChange={(event) => setFormat(event.target.value)}
+                disabled={creating}
+                style={{ width: '100%', marginBottom: '16px' }}
+              >
+                {(game.supported_match_formats ?? ['1v1']).filter((value) => value in supportedFormats).map((value) => (
+                  <option value={value} key={value}>{supportedFormats[value]}</option>
+                ))}
+              </select>
 
               <button
                 type="button"
