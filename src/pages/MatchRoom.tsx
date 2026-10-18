@@ -741,22 +741,28 @@ export default function MatchRoom() {
           <button
             type="button"
             onClick={() => setChatOpen((open) => !open)}
+            aria-label={chatOpen ? 'Fermer la discussion' : 'Écrire aux joueurs du match'}
             style={{
               position: 'fixed',
-              right: '18px',
+              right: '14px',
               bottom: '82px',
-              width: '58px',
-              height: '58px',
-              borderRadius: '50%',
-              border: 'none',
+              minHeight: '54px',
+              padding: '0 18px',
+              borderRadius: '999px',
+              border: '1px solid rgba(255,255,255,0.22)',
               background: '#ff8a00',
               color: '#fff',
-              fontSize: '25px',
+              fontSize: '15px',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '9px',
               zIndex: 100,
               boxShadow: '0 8px 25px rgba(0,0,0,0.35)',
             }}
           >
-            💬
+            <span aria-hidden="true">💬</span>
+            {chatOpen ? 'Fermer la discussion' : 'Écrire aux joueurs'}
           </button>
 
           {chatOpen && (
