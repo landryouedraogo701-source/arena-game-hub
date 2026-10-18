@@ -181,6 +181,18 @@ export default function TournamentHub() {
     await loadData()
   }
 
+  async function cancelTournament(id: string) {
+    if (!window.confirm('Annuler ce tournoi ? Il ne sera plus proposé aux joueurs.')) return
+    const { error } = await supabase.rpc('cancel_own_tournament', { p_tournament_id: id })
+    if (error) {
+      console.error('[TournamentHub] Échec annulation tournoi :', error)
+      setMessage('Annulation impossible (' + (error.code ?? 'erreur') + ') : ' + error.message)
+      return
+    }
+    setMessage('Tournoi annulé.')
+    await loadData()
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -231,7 +243,7 @@ export default function TournamentHub() {
               {t.description && <p>{t.description}</p>}
               <div className="tournament-meta"><span>👥 Jusqu’à {t.participant_limit} participants</span><span>🎮 {formatLabels[t.match_format ?? '1v1'] ?? t.match_format ?? '1 contre 1'}</span>{t.starts_at && <span>📅 {new Date(t.starts_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</div>
               {t.status === 'registration' ? (registeredTournamentIds.includes(t.id) ? <button type="button" className="secondary-button full-button" disabled>✓ Déjà inscrit</button> : <button type="button" className="primary-button full-button" onClick={() => void joinTournament(t.id)}>S’inscrire au tournoi</button>) : <button type="button" className="secondary-button full-button" disabled>Inscriptions indisponibles</button>}
-              {currentUserId === t.organizer_id && <div className="tournament-owner-actions">{t.status === 'draft' && <button type="button" className="secondary-button full-button" onClick={() => void publishTournament(t.id)}>Publier les inscriptions</button>}{t.status === 'registration' && <button type="button" className="secondary-button full-button" onClick={() => void generateBracket(t.id)}>Lancer le tirage au sort</button>}</div>}
+              {currentUserId === t.organizer_id && <div className="tournament-owner-actions">{t.status === 'draft' && <button type="button" className="secondary-button full-button" onClick={() => void publishTournament(t.id)}>Publier les inscriptions</button>}{t.status === 'registration' && <button type="button" className="secondary-button full-button" onClick={() => void generateBracket(t.id)}>Lancer le tirage au sort</button>}{['draft', 'registration'].includes(t.status) && <button type="button" className="secondary-button full-button" onClick={() => void cancelTournament(t.id)}>Annuler mon tournoi</button>}</div>}
             </article>)}</div>}
         </section>
         <section className="section">
