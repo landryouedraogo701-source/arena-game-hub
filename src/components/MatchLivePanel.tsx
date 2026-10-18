@@ -40,6 +40,7 @@ export default function MatchLivePanel({
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [stopping, setStopping] = useState(false)
   const [role, setRole] = useState<'publisher' | 'viewer' | null>(null)
   const roomRef = useRef<any>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -203,18 +204,19 @@ export default function MatchLivePanel({
         Diffusion audio/vidéo LiveKit. Ce lecteur diffuse la caméra et le micro du téléphone ; il ne capture pas automatiquement l’écran d’un autre jeu.
       </p>
       {session ? (
-        <p style={{ fontSize: 13, opacity: 0.8 }}>
-          État : {session.status === 'live' && session.stream_state === 'live' ? 'diffusion active' : 'session en attente de connexion'}
-        </p>
+        <div style={{ margin: '10px 0 14px', padding: '12px 14px', borderRadius: 12, background: session.status === 'live' && session.stream_state === 'live' ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.05)', border: '1px solid ' + (session.status === 'live' && session.stream_state === 'live' ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.12)') }}>
+          <strong style={{ display: 'block' }}>{session.status === 'live' && session.stream_state === 'live' ? '🔴 LIVE EN DIRECT' : session.status === 'waiting' ? '🟡 Live préparé — en attente de l’hôte' : 'État du Live : ' + session.stream_state}</strong>
+          <span style={{ fontSize: 13, opacity: 0.8 }}>Le match et le Live ont des états séparés : arrêter le Live ne termine pas automatiquement le match.</span>
+        </div>
       ) : (
-        <p style={{ fontSize: 13, opacity: 0.8 }}>Aucune session Live créée pour ce match.</p>
+        <p style={{ fontSize: 13, opacity: 0.8 }}>Aucun Live lancé. L’hôte désigné peut le démarrer lorsque le match est prêt.</p>
       )}
       <video ref={videoRef} playsInline autoPlay muted={role === 'publisher'} style={{ width: '100%', minHeight: 180, background: '#080b12', borderRadius: 12, objectFit: 'contain' }} />
       <div ref={audioContainerRef} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
         {!connected && isParticipant && ['capture', 'stream_connecting', 'live'].includes(matchStatus) && isDesignatedHost && (
           <button className="primary-button" type="button" disabled={busy} onClick={prepareAndPublish}>
-            {busy ? 'Connexion…' : session ? '🎥 Reprendre / démarrer le Live' : '🎥 Démarrer le Live'}
+            {busy ? 'Connexion…' : session?.status === 'live' ? '🎥 Reconnecter le Live' : '🎥 Démarrer le Live'}
           </button>
         )}
         {!connected && isParticipant && ['capture', 'stream_connecting', 'live'].includes(matchStatus) && !isDesignatedHost && (
@@ -254,6 +256,7 @@ export default function MatchLivePanel({
           </button>
         )}
       </div>
+      {connected && role === 'publisher' && <p style={{ fontSize: 13, opacity: 0.8 }}>Pour terminer la diffusion, appuie sur « Terminer le Live ». Le match restera en cours jusqu’à ce qu’il soit terminé séparément.</p>}
       {notice && <p role="status" style={{ marginBottom: 0 }}>{notice}</p>}
       {error && <p role="alert" className="auth-error" style={{ marginTop: 12 }}>{error}</p>}
     </section>
