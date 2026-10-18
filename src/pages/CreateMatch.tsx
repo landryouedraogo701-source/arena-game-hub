@@ -51,7 +51,8 @@ export default function CreateMatch() {
       .maybeSingle()
 
     if (error) {
-      setError(error.message)
+      console.error('[CreateMatch] Échec du chargement du jeu :', error)
+      setError('Impossible de charger les informations de ce jeu. Réessaie dans quelques instants.')
       setLoading(false)
       return
     }
@@ -118,7 +119,8 @@ export default function CreateMatch() {
 
     if (matchError || !match) {
       setCreating(false)
-      setError(matchError?.message ?? 'Impossible de créer le match.')
+      console.error('[CreateMatch] Échec de création du match :', matchError)
+      setError('La création du match amical a échoué. Vérifie ta connexion puis réessaie.')
       return
     }
 
@@ -138,7 +140,8 @@ export default function CreateMatch() {
         .eq('id', match.id)
 
       setCreating(false)
-      setError(playerError.message)
+      console.error('[CreateMatch] Échec de l’ajout du créateur aux participants :', playerError)
+      setError('Le match n’a pas pu être initialisé correctement. Aucun match incomplet ne sera conservé. Réessaie.')
       return
     }
 
