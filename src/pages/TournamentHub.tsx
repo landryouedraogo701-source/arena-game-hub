@@ -34,6 +34,7 @@ export default function TournamentHub() {
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [canCreateTournament, setCanCreateTournament] = useState(false)
+  const [registeredTournamentIds, setRegisteredTournamentIds] = useState<string[]>([])
   const [message, setMessage] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
@@ -78,6 +79,10 @@ export default function TournamentHub() {
     }
     if (tournamentResult.error) setMessage('Les tournois ne peuvent pas être chargés pour le moment. Vérifie les politiques d’accès Supabase.')
     else setTournaments((tournamentResult.data ?? []) as unknown as Tournament[])
+    if (userId) {
+      const { data: registrations } = await supabase.from('tournament_participants').select('tournament_id').eq('user_id', userId)
+      setRegisteredTournamentIds((registrations ?? []).map((row: { tournament_id: string }) => row.tournament_id))
+    } else setRegisteredTournamentIds([])
     setLoading(false)
   }
 
@@ -171,8 +176,9 @@ export default function TournamentHub() {
       return
     }
     const { error } = await supabase.rpc('register_for_tournament', { p_tournament_id: id })
-    setMessage(error ? 'Inscription impossible : vérifie que les inscriptions sont ouvertes et que tu remplis les conditions.' : 'Inscription enregistrée.')
-    if (!error) await loadData()
+    if (error) { console.error('[TournamentHub] Échec inscription :', error); setMessage('Inscription impossible (' + (error.code ?? 'erreur') + ') : ' + error.message); return }
+    setMessage('Inscription confirmée.')
+    await loadData()
   }
 
   return (
@@ -224,7 +230,7 @@ export default function TournamentHub() {
               <h3>{t.name}</h3>
               {t.description && <p>{t.description}</p>}
               <div className="tournament-meta"><span>👥 Jusqu’à {t.participant_limit} participants</span><span>🎮 {formatLabels[t.match_format ?? '1v1'] ?? t.match_format ?? '1 contre 1'}</span>{t.starts_at && <span>📅 {new Date(t.starts_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</div>
-              <button type="button" className="primary-button full-button" disabled={t.status !== 'registration'} onClick={() => void joinTournament(t.id)}>{t.status === 'registration' ? 'S’inscrire au tournoi' : 'Inscriptions indisponibles'}</button>
+              {t.status === 'registration' ? (registeredTournamentIds.includes(t.id) ? <button type="button" className="secondary-button full-button" disabled>✓ Déjà inscrit</button> : <button type="button" className="primary-button full-button" onClick={() => void joinTournament(t.id)}>S’inscrire au tournoi</button>) : <button type="button" className="secondary-button full-button" disabled>Inscriptions indisponibles</button>}
               {currentUserId === t.organizer_id && <div className="tournament-owner-actions">{t.status === 'draft' && <button type="button" className="secondary-button full-button" onClick={() => void publishTournament(t.id)}>Publier les inscriptions</button>}{t.status === 'registration' && <button type="button" className="secondary-button full-button" onClick={() => void generateBracket(t.id)}>Lancer le tirage au sort</button>}</div>}
             </article>)}</div>}
         </section>
