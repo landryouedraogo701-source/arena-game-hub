@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type PointerEvent } from 'react'
 import { Link } from 'react-router-dom'
 
 export default function FloatingArenaBubble() {
@@ -6,7 +6,7 @@ export default function FloatingArenaBubble() {
   const [position, setPosition] = useState({ right: 16, bottom: 96 })
   const drag = useRef<{ x: number; y: number; right: number; bottom: number; moved: boolean } | null>(null)
 
-  function startDrag(event: React.PointerEvent<HTMLButtonElement>) {
+  function startDrag(event: PointerEvent<HTMLButtonElement>) {
     const target = event.currentTarget
     target.setPointerCapture(event.pointerId)
     drag.current = { x: event.clientX, y: event.clientY, right: position.right, bottom: position.bottom, moved: false }
