@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { BottomNav } from './Home'
 
 type Game = { id: string; name: string; slug: string; supported_match_formats: string[] }
+type TournamentParticipant = { tournament_id: string; user_id: string; status: string; registered_at: string; profile?: { username: string; display_name: string; avatar_url: string | null } | null }
 type Tournament = {
   id: string
   name: string
@@ -35,6 +36,7 @@ export default function TournamentHub() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [canCreateTournament, setCanCreateTournament] = useState(false)
   const [registeredTournamentIds, setRegisteredTournamentIds] = useState<string[]>([])
+  const [participantsByTournament, setParticipantsByTournament] = useState<Record<string, TournamentParticipant[]>>({})
   const [message, setMessage] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
@@ -79,6 +81,37 @@ export default function TournamentHub() {
     }
     if (tournamentResult.error) setMessage('Les tournois ne peuvent pas être chargés pour le moment. Vérifie les politiques d’accès Supabase.')
     else setTournaments((tournamentResult.data ?? []) as unknown as Tournament[])
+
+    if (!tournamentResult.error) {
+      const visibleTournaments = (tournamentResult.data ?? []) as unknown as Tournament[]
+      const ids = visibleTournaments.map(t => t.id)
+      if (ids.length) {
+        const { data: participantRows, error: participantError } = await supabase
+          .from('tournament_participants')
+          .select('tournament_id,user_id,status,registered_at')
+          .in('tournament_id', ids)
+          .in('status', ['registered', 'confirmed', 'qualified', 'winner', 'runner_up', 'third_place'])
+          .order('registered_at', { ascending: true })
+        if (participantError) {
+          setMessage('Les tournois sont chargés, mais la liste des inscrits est indisponible : vérifie les politiques de lecture de tournament_participants.')
+          setParticipantsByTournament({})
+        } else {
+          const rows = participantRows ?? []
+          const userIds = [...new Set(rows.map((row: any) => row.user_id))]
+          let profilesById: Record<string, any> = {}
+          if (userIds.length) {
+            const { data: profiles } = await supabase.from('profiles').select('id,username,display_name,avatar_url').in('id', userIds)
+            profilesById = Object.fromEntries((profiles ?? []).map((profile: any) => [profile.id, profile]))
+          }
+          const grouped: Record<string, TournamentParticipant[]> = {}
+          for (const row of rows as any[]) {
+            if (!grouped[row.tournament_id]) grouped[row.tournament_id] = []
+            grouped[row.tournament_id].push({ ...row, profile: profilesById[row.user_id] ?? null })
+          }
+          setParticipantsByTournament(grouped)
+        }
+      } else setParticipantsByTournament({})
+    }
     if (userId) {
       const { data: registrations } = await supabase.from('tournament_participants').select('tournament_id').eq('user_id', userId)
       setRegisteredTournamentIds((registrations ?? []).map((row: { tournament_id: string }) => row.tournament_id))
@@ -257,6 +290,29 @@ export default function TournamentHub() {
               <h3>{t.name}</h3>
               {t.description && <p>{t.description}</p>}
               <div className="tournament-meta"><span>👥 Jusqu’à {t.participant_limit} participants</span><span>🎮 {formatLabels[t.match_format ?? '1v1'] ?? t.match_format ?? '1 contre 1'}</span>{t.starts_at && <span>📅 {new Date(t.starts_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</div>
+
+              {(() => {
+                const roster = participantsByTournament[t.id] ?? []
+                const activeCount = roster.length
+                const remaining = Math.max(0, t.participant_limit - activeCount)
+                return <section aria-label={'Participants de ' + t.name} style={{ margin: '14px 0', padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                    <strong>👥 Inscrits : {activeCount}/{t.participant_limit}</strong>
+                    <span style={{ fontSize: 12, opacity: 0.75 }}>{remaining === 0 ? 'Complet' : remaining + ' place(s) restante(s)'}</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 99, overflow: 'hidden', background: 'rgba(255,255,255,0.1)', marginBottom: 12 }}>
+                    <div style={{ width: Math.min(100, activeCount / Math.max(1, t.participant_limit) * 100) + '%', height: '100%', background: '#ff8a00' }} />
+                  </div>
+                  {roster.length === 0 ? <p style={{ margin: 0, fontSize: 13, opacity: 0.65 }}>Aucun joueur inscrit pour le moment.</p> :
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {roster.map((p, index) => <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13 }}>
+                        {p.profile?.avatar_url ? <img src={p.profile.avatar_url} alt="" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }} /> : <span aria-hidden="true" style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', borderRadius: '50%', background: 'rgba(255,138,0,0.15)' }}>👤</span>}
+                        <span style={{ flex: 1, minWidth: 0 }}>{p.profile?.display_name || p.profile?.username || ('Joueur ' + (index + 1))}{p.user_id === currentUserId ? ' (toi)' : ''}</span>
+                        <span style={{ opacity: 0.65, fontSize: 11 }}>{p.status === 'qualified' ? 'Qualifié' : p.status === 'winner' ? 'Vainqueur' : p.status === 'confirmed' ? 'Confirmé' : 'Inscrit'}</span>
+                      </div>)}
+                    </div>}
+                </section>
+              })()}
               {t.status === 'registration' ? (registeredTournamentIds.includes(t.id) ? <button type="button" className="secondary-button full-button" disabled>✓ Déjà inscrit</button> : <button type="button" className="primary-button full-button" onClick={() => void joinTournament(t.id)}>S’inscrire au tournoi</button>) : <button type="button" className="secondary-button full-button" disabled>Inscriptions indisponibles</button>}
               {currentUserId === t.organizer_id && <div className="tournament-owner-actions">{t.status === 'draft' && <button type="button" className="secondary-button full-button" onClick={() => void publishTournament(t.id)}>Publier les inscriptions</button>}{t.status === 'registration' && <button type="button" className="secondary-button full-button" onClick={() => void generateBracket(t.id)}>Lancer le tirage au sort</button>}{['draft', 'registration'].includes(t.status) && <button type="button" className="secondary-button full-button" onClick={() => void cancelTournament(t.id)}>Annuler mon tournoi</button>}{t.status === 'draft' && <button type="button" className="secondary-button full-button" onClick={() => void deleteTournament(t.id)}>Supprimer mon brouillon</button>}</div>}
             </article>)}</div>}
