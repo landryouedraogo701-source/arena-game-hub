@@ -13,6 +13,7 @@ import MatchSearch from './pages/MatchSearch'
 import TournamentHub from './pages/TournamentHub'
 import Championship from './pages/Championship'
 import Management from './pages/Management'
+import FloatingArenaBubble from './components/FloatingArenaBubble'
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <FloatingArenaBubble />
     </BrowserRouter>
   )
 }
