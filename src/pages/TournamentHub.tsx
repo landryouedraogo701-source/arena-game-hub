@@ -138,8 +138,23 @@ export default function TournamentHub() {
   async function publishTournament(id: string) {
     setMessage('')
     const { error } = await supabase.rpc('publish_tournament_registration', { p_tournament_id: id })
-    setMessage(error ? 'Publication refusée. Vérifie que tu es l’organisateur et que le tournoi peut être publié.' : 'Inscriptions ouvertes.')
-    if (!error) await loadData()
+    if (error) {
+      console.error('[TournamentHub] Erreur Supabase lors de la publication :', {
+        code: error.code, message: error.message, details: error.details, hint: error.hint,
+      })
+      const backendMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ')
+      if (backendMessage.includes('AUTH_REQUIRED')) setMessage('Ta session a expiré. Reconnecte-toi puis réessaie.')
+      else if (backendMessage.includes('NOT_AUTHORIZED')) setMessage('Seul l’organisateur du tournoi ou un administrateur peut publier les inscriptions.')
+      else if (backendMessage.includes('TOURNAMENT_MUST_BE_DRAFT')) setMessage('Ce tournoi n’est plus en brouillon. Actualise la page pour voir son état actuel.')
+      else if (backendMessage.includes('START_MUST_BE_IN_FUTURE')) setMessage('La date de début doit être dans le futur. Modifie la date du tournoi avant de publier.')
+      else if (backendMessage.includes('INVALID_REGISTRATION_WINDOW')) setMessage('La période d’inscription est invalide. Vérifie les dates d’ouverture et de clôture.')
+      else if (backendMessage.includes('REGISTRATION_MUST_CLOSE_BEFORE_START')) setMessage('La clôture des inscriptions doit précéder le début du tournoi.')
+      else if (backendMessage.includes('REGISTRATION_CLOSE_MUST_BE_IN_FUTURE')) setMessage('La date de clôture des inscriptions est passée. Crée une nouvelle période d’inscription.')
+      else setMessage('Échec Supabase' + (error.code ? ' (' + error.code + ')' : '') + ' : ' + error.message)
+      return
+    }
+    setMessage('Inscriptions ouvertes.')
+    await loadData()
   }
 
   async function generateBracket(id: string) {
