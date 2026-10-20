@@ -160,7 +160,7 @@ export default function TournamentHub() {
       else if (backendMessage.includes('INVALID_PARTICIPANT_LIMIT')) userMessage = 'Le nombre de participants doit être compris entre 2 et 1 024.'
       else if (backendMessage.includes('MATCH_FORMAT_NOT_SUPPORTED_BY_GAME')) userMessage = 'Ce format n’est pas autorisé pour le jeu sélectionné. Modifie les formats pris en charge dans le catalogue Supabase.'
       else if (backendMessage.includes('INVALID_MATCH_FORMAT')) userMessage = 'Le format sélectionné est invalide. Choisis un format proposé par le formulaire.'
-      else userMessage = 'Échec Supabase' + (error.code ? ' (' + error.code + ')' : '') + ' : ' + error.message
+      else userMessage = 'La création a échoué à cause d’un problème technique. Réessaie dans quelques instants. Si le problème continue, transmets le code ' + (error.code || 'ARENA-TOURNAMENT-CREATE') + ' à l’assistance Arena.'
       setMessage(userMessage)
       return
     }
@@ -188,7 +188,7 @@ export default function TournamentHub() {
       else if (backendMessage.includes('INVALID_REGISTRATION_WINDOW')) setMessage('La période d’inscription est invalide. Vérifie les dates d’ouverture et de clôture.')
       else if (backendMessage.includes('REGISTRATION_MUST_CLOSE_BEFORE_START')) setMessage('La clôture des inscriptions doit précéder le début du tournoi.')
       else if (backendMessage.includes('REGISTRATION_CLOSE_MUST_BE_IN_FUTURE')) setMessage('La date de clôture des inscriptions est passée. Crée une nouvelle période d’inscription.')
-      else setMessage('Échec Supabase' + (error.code ? ' (' + error.code + ')' : '') + ' : ' + error.message)
+      else setMessage('La publication a échoué à cause d’un problème technique. Vérifie les informations du tournoi puis réessaie. Code : ' + (error.code || 'ARENA-TOURNAMENT-PUBLISH') + '.')
       return
     }
     setMessage('Inscriptions ouvertes.')
