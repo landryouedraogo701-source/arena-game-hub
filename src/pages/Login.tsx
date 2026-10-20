@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { loginUser, loginWithGoogle } from '../lib/auth'
+import { getAuthErrorMessage } from '../lib/authMessages'
+import ArenaBrand from '../components/ArenaBrand'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -36,7 +38,7 @@ export default function Login() {
     setLoading(false)
 
     if (error) {
-      setError(error.message)
+      setError(getAuthErrorMessage(error, 'login'))
       return
     }
 
@@ -52,15 +54,13 @@ export default function Login() {
 
     if (error) {
       setLoading(false)
-      setError(error.message)
+      setError(getAuthErrorMessage(error, 'google'))
     }
   }
 
   return (
     <div className="auth-page">
-      <div className="auth-logo">
-        <span>A</span> Arena
-      </div>
+      <ArenaBrand />
 
       <form className="auth-card" onSubmit={handleSubmit}>
         <span className="eyebrow">BIENVENUE</span>
