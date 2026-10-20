@@ -765,3 +765,27 @@ button:disabled { cursor: not-allowed; opacity: .55; filter: saturate(.65); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Shared Arena brand lockup for login and registration */
+.auth-logo { flex-wrap: wrap; gap: 10px; }
+.auth-logo .arena-brand-word {
+  display: inline;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: #f5f7fb;
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: -.5px;
+}
+.auth-logo .arena-brand-caption {
+  flex-basis: 100%;
+  margin: -7px 0 0 44px;
+  color: #7e899b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2.4px;
+}
+.auth-logo-compact { margin-bottom: 30px; }
+.auth-logo-compact .arena-brand-caption { display: none; }
