@@ -1,6 +1,8 @@
 import { FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loginWithGoogle, registerUser } from '../lib/auth'
+import { getAuthErrorMessage } from '../lib/authMessages'
+import ArenaBrand from '../components/ArenaBrand'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -43,7 +45,7 @@ export default function Register() {
     setLoading(false)
 
     if (error) {
-      setError(error.message)
+      setError(getAuthErrorMessage(error, 'register'))
       return
     }
 
@@ -64,13 +66,13 @@ export default function Register() {
     setLoading(false)
 
     if (error) {
-      setError(error.message)
+      setError(getAuthErrorMessage(error, 'google'))
     }
   }
 
   return (
     <div className="auth-page">
-      <div className="auth-logo"><span>A</span> Arena</div>
+      <ArenaBrand />
 
       <form className="auth-card" onSubmit={handleSubmit}>
         <span className="eyebrow">NOUVEAU JOUEUR</span>
